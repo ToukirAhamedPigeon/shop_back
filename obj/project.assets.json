@@ -9524,9 +9524,9 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "D:\\shop\\shop_back\\server.csproj",
-      "projectName": "server",
-      "projectPath": "D:\\shop\\shop_back\\server.csproj",
+      "projectUniqueName": "D:\\shop\\shop_back\\shop_back.csproj",
+      "projectName": "shop_back",
+      "projectPath": "D:\\shop\\shop_back\\shop_back.csproj",
       "packagesPath": "C:\\Users\\touki\\.nuget\\packages\\",
       "outputPath": "D:\\shop\\shop_back\\obj\\",
       "projectStyle": "PackageReference",

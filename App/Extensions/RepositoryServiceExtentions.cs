@@ -1,9 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
-using server.App.Repositories;
-using server.App.Models;
+using shop_back.App.Repositories;
+using shop_back.App.Models;
 using System;
 
-namespace server.App.Extensions
+namespace shop_back.App.Extensions
 {
     public static class RepositoryServiceExtensions
     {

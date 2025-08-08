@@ -1,10 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-using server.App.DTOs;
-using server.App.Models;
-using server.App.Repositories;
-using server.App.Data;
+using shop_back.App.DTOs;
+using shop_back.App.Models;
+using shop_back.App.Repositories;
+using shop_back.App.Data;
 
-namespace server.App.Repositories
+namespace shop_back.App.Repositories
 {
     public class ProductRepository(AppDbContext _context) : IProductRepository
     {

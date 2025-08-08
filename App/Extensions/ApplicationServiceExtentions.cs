@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
-using server.App.Services;
+using shop_back.App.Services;
 
-namespace server.App.Extensions
+namespace shop_back.App.Extensions
 {
     public static class ApplicationServiceExtensions
     {

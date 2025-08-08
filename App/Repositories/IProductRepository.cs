@@ -1,7 +1,7 @@
-using server.App.Models;
-using server.App.DTOs;
+using shop_back.App.Models;
+using shop_back.App.DTOs;
 
-namespace server.App.Repositories
+namespace shop_back.App.Repositories
 {
     public interface IProductRepository : IRepository<Product, Guid>
     {

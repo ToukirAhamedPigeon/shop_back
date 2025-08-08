@@ -1,9 +1,9 @@
 using DotNetEnv; // For loading variables from .env.local
 using Microsoft.EntityFrameworkCore; // For EF Core
 using Microsoft.EntityFrameworkCore.Design;
-using server.App.Data; // Replace with your actual namespace
-using server.App.Extensions;
-using server.App.Models;
+using shop_back.App.Data; // Replace with your actual namespace
+using shop_back.App.Extensions;
+using shop_back.App.Models;
 
 Env.Load(".env.local"); // 🔐 Load secrets like DB connection string from .env.local
 

@@ -1,8 +1,8 @@
 {
   "Version": 1,
-  "Hash": "cGifSLNzTzd2u7nwRViX9XSIdpfM/PZJ54btAXk9aTI=",
-  "Source": "server",
-  "BasePath": "_content/server",
+  "Hash": "qSqUBtZh1VjnWLR/gdIXSvgseAbUkfq3/lSSfIFAmNI=",
+  "Source": "shop_back",
+  "BasePath": "_content/shop_back",
   "Mode": "Default",
   "ManifestType": "Build",
   "ReferencedProjectsConfiguration": [],

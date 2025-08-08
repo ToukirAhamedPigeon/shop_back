@@ -1,8 +1,8 @@
-using server.App.Models;
-using server.App.DTOs;
-using server.App.Repositories;
+using shop_back.App.Models;
+using shop_back.App.DTOs;
+using shop_back.App.Repositories;
 
-namespace server.App.Services
+namespace shop_back.App.Services
 {
     public class ProductService(IProductRepository _repo) : IProductService
     {

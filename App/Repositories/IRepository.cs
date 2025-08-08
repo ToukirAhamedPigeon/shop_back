@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace server.App.Repositories
+namespace shop_back.App.Repositories
 {
     public interface IRepository<T, TKey> where T : class
     {

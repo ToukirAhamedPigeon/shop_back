@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
 
-namespace server.App.Models
+namespace shop_back.App.Models
 {
     [Table("products")]
     public class Product

@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "eOkLbY/Z+6M=",
+  "dgSpecHash": "7bKjm1W272s=",
   "success": true,
-  "projectFilePath": "D:\\shop\\shop_back\\server.csproj",
+  "projectFilePath": "D:\\shop\\shop_back\\shop_back.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\touki\\.nuget\\packages\\azure.core\\1.38.0\\azure.core.1.38.0.nupkg.sha512",
     "C:\\Users\\touki\\.nuget\\packages\\azure.identity\\1.11.4\\azure.identity.1.11.4.nupkg.sha512",

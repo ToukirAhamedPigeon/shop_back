@@ -4,11 +4,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
-using server.App.Data;
+using shop_back.App.Data;
 
 #nullable disable
 
-namespace server.App.Migrations
+namespace shop_back.App.Migrations
 {
     [DbContext(typeof(AppDbContext))]
     partial class AppDbContextModelSnapshot : ModelSnapshot
@@ -22,7 +22,7 @@ namespace server.App.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("server.App.Models.Product", b =>
+            modelBuilder.Entity("shop_back.App.Models.Product", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");

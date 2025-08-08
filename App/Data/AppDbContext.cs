@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using server.App.Models;
+using shop_back.App.Models;
 
-namespace server.App.Data
+namespace shop_back.App.Data
 {
     public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
     {

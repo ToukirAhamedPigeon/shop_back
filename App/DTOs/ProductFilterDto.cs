@@ -1,4 +1,4 @@
-namespace server.App.DTOs
+namespace shop_back.App.DTOs
 {
     using System.Text.Json.Serialization;
     public class ProductFilterDto

@@ -1,10 +1,10 @@
-using server.App.Models;
-using server.App.DTOs;
+using shop_back.App.Models;
+using shop_back.App.DTOs;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace server.App.Services
+namespace shop_back.App.Services
 {
     public interface IProductService
     {
