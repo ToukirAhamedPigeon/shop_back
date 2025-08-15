@@ -1,0 +1,84 @@
+## Ignore Visual Studio temporary files, build results, and
+## user-specific files
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Auto-generated files
+*.Designer.cs
+*.generated.cs
+*.g.cs
+*.g.i.cs
+
+# Build results
+bin/
+obj/
+out/
+
+# .NET Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Visual Studio Code
+.vscode/
+
+# Rider IDE
+.idea/
+
+# NuGet packages
+*.nupkg
+*.snupkg
+packages/
+.nuget/
+
+# ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+# ASP.NET temporary files
+App_Data/
+
+# Logs
+*.log
+logs/
+Debug/
+Release/
+
+# Dotnet user secrets
+secrets.json
+secrets.*
+
+# Publish folder
+publish/
+*.publishsettings
+
+# Rider IDE
+.idea/
+*.sln.iml
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# npm or frontend builds if any
+node_modules/
+dist/
+
+# JetBrains Rider
+.idea/
+
+# Test Results
+TestResults/
+
+# Coverage
+*.coverage
+*.coveragexml
+*.opencover.xml
+coverage/
+Dockerfile

@@ -1,81 +1,104 @@
 using DotNetEnv; // For loading variables from .env.local
 using Microsoft.EntityFrameworkCore; // For EF Core
-using Microsoft.EntityFrameworkCore.Design;
-using shop_back.App.Data; // Replace with your actual namespace
+using shop_back.App.Data; // আপনার প্রকল্পের namespace অনুসারে পরিবর্তন করুন
 using shop_back.App.Extensions;
 using shop_back.App.Models;
 
-Env.Load(".env.local"); // 🔐 Load secrets like DB connection string from .env.local
+// Load .env.local only if it exists (for local development)
+try
+{
+    Env.Load(".env.local");
+}
+catch
+{
+    // .env.local might not exist in Docker, ignore if not found
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure Kestrel to listen on port 5000
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.ListenAnyIP(5000);
 });
 
-// 💡 Inject the DB connection string from the environment into the config system
-builder.Configuration["ConnectionStrings:DefaultConnection"] = Env.GetString("DefaultConnection");
+// Get connection string from environment variable or .env.local
+string connStr = Environment.GetEnvironmentVariable("DefaultConnection") ?? Env.GetString("DefaultConnection");
 
-// 🔌 Get the connection string from configuration
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (!string.IsNullOrEmpty(connStr))
+{
+    builder.Configuration["ConnectionStrings:DefaultConnection"] = connStr;
+}
+else
+{
+    Console.WriteLine("⚠️ Warning: DefaultConnection string not set in environment or .env.local");
+}
 
-// 🌐 Load allowed CORS origins (e.g., frontend URL) from appsettings.json or elsewhere
+// Load allowed CORS origins from config or fallback to empty array
 var allowedOrigins = builder.Configuration
     .GetSection("Cors:AllowedOrigins")
     .Get<string[]>() ?? Array.Empty<string>();
 
-// 📦 Register the EF Core DB context with PostgreSQL and Supabase connection string
+// Register DbContext with PostgreSQL using connection string
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-
-
-// 🧱 Register repository patterns
+// Register repository and service layers
 builder.Services.AddRepositories();
-
-// 🛠 Register business logic layer (services)
 builder.Services.AddServices();
 
-// 🚀 Add support for API controllers
+// Add API controllers
 builder.Services.AddControllers();
 
-// 🔍 Enable Swagger for API documentation (OpenAPI)
+// Enable Swagger/OpenAPI support
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// 🔐 Define a CORS policy named "AllowFrontend"
+// Define CORS policy named "AllowFrontend"
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins(allowedOrigins) // Set allowed frontend origins (from config)
-              .AllowAnyHeader()            // Allow all headers
-              .AllowAnyMethod()            // Allow all HTTP methods (GET, POST, etc.)
-              .AllowCredentials();         // Support cookies, tokens, or credentials
+        policy.WithOrigins(
+            "http://ec2-13-61-64-134.eu-north-1.compute.amazonaws.com:5173",
+            "http://ec2-13-61-64-134.eu-north-1.compute.amazonaws.com:5174",
+            "http://ec2-13-61-64-134.eu-north-1.compute.amazonaws.com:4200",
+            "http://ec2-13-61-64-134.eu-north-1.compute.amazonaws.com:3000",
+            "http://localhost:4200",
+            "http://localhost:5173",
+            "http://localhost:5174",
+            "http://localhost:3000"
+        )
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials();
     });
 });
 
 var app = builder.Build();
 
+// Test DB connection on startup (optional)
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     Console.WriteLine("✅ Connected to DB: " + db.Database.CanConnect());
 }
 
-// 🧪 Enable Swagger UI in development environment
+// Enable Swagger UI
 app.UseSwagger();
 app.UseSwaggerUI();
 
-// 🚦 Set up the HTTP request pipeline
+// Routing must come before middleware like CORS and Authorization
+app.UseRouting();
 
-app.UseRouting();           // 📍 Enable routing for controller/action matching
-app.UseCors("AllowFrontend"); // 🔓 Apply the defined CORS policy
-app.UseAuthorization();     // 🔐 Enable authorization middleware (if using auth)
+// Apply CORS middleware BEFORE Authorization
+app.UseCors("AllowFrontend");
 
-// 📬 Map controller routes (e.g., /api/products)
+// Authorization middleware
+app.UseAuthorization();
+
+// Map controller routes (API endpoints)
 app.MapControllers();
 
-// ▶️ Start the app
+// Run the application
 app.Run();
