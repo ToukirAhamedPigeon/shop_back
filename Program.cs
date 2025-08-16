@@ -97,6 +97,21 @@ app.UseCors("AllowFrontend");
 // Authorization middleware
 app.UseAuthorization();
 
+// Auth Seeder
+// using (var scope = app.Services.CreateScope())
+// {
+//     var services = scope.ServiceProvider;
+//     try
+//     {
+//         await InitAuthSeeder.Seed(services);
+//         Console.WriteLine("Authentication seed completed.");
+//     }
+//     catch (Exception ex)
+//     {
+//         Console.WriteLine($"Seeding failed: {ex.Message}");
+//     }
+// }
+
 // Map controller routes (API endpoints)
 app.MapControllers();
 

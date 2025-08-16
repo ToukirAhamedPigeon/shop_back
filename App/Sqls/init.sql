@@ -6,7 +6,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Users Table
+-- Users Table (single word, keep as-is)
 CREATE TABLE users (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   name character varying NOT NULL,
@@ -19,28 +19,28 @@ CREATE TABLE users (
   CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 
--- Roles Table
+-- Roles Table (single word)
 CREATE TABLE roles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(100) NOT NULL,
-    guard_name VARCHAR(50) DEFAULT 'web',
+    guard_name VARCHAR(50) DEFAULT 'admin',
     UNIQUE(name, guard_name),
     created_at TIMESTAMP DEFAULT now(),
     updated_at TIMESTAMP DEFAULT now()
 );
 
--- Permissions Table
+-- Permissions Table (single word)
 CREATE TABLE permissions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(100) NOT NULL,
-    guard_name VARCHAR(50) DEFAULT 'web',
+    guard_name VARCHAR(50) DEFAULT 'admin',
     UNIQUE(name, guard_name),
     created_at TIMESTAMP DEFAULT now(),
     updated_at TIMESTAMP DEFAULT now()
 );
 
--- Model Roles Table
-CREATE TABLE modelRoles (
+-- Model Roles Table → model_roles
+CREATE TABLE model_roles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     model_id UUID NOT NULL,
     role_id UUID REFERENCES roles(id) ON DELETE CASCADE,
@@ -50,8 +50,8 @@ CREATE TABLE modelRoles (
     UNIQUE(model_id, role_id, model_name)
 );
 
--- Model Permissions Table
-CREATE TABLE modelPermissions (
+-- Model Permissions Table → model_permissions
+CREATE TABLE model_permissions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     model_id UUID NOT NULL,
     permission_id UUID REFERENCES permissions(id) ON DELETE CASCADE,
@@ -59,6 +59,16 @@ CREATE TABLE modelPermissions (
     created_at TIMESTAMP DEFAULT now(),
     updated_at TIMESTAMP DEFAULT now(),
     UNIQUE(model_id, permission_id, model_name)
+);
+
+-- Role Permissions Table → role_permissions
+CREATE TABLE role_permissions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    permission_id UUID REFERENCES permissions(id) ON DELETE CASCADE,
+    role_id UUID REFERENCES roles(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT now(),
+    updated_at TIMESTAMP DEFAULT now(),
+    UNIQUE(permission_id, role_id)
 );
 
 -- Triggers for updated_at
@@ -77,25 +87,33 @@ BEFORE UPDATE ON permissions
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
-CREATE TRIGGER set_modelroles_updated_at
-BEFORE UPDATE ON modelRoles
+CREATE TRIGGER set_model_roles_updated_at
+BEFORE UPDATE ON model_roles
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
-CREATE TRIGGER set_modelpermissions_updated_at
-BEFORE UPDATE ON modelPermissions
+CREATE TRIGGER set_model_permissions_updated_at
+BEFORE UPDATE ON model_permissions
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER set_role_permissions_updated_at
+BEFORE UPDATE ON role_permissions
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
 -- Indexes for performance
-CREATE INDEX idx_modelroles_model_id ON modelRoles(model_id);
-CREATE INDEX idx_modelroles_role_id ON modelRoles(role_id);
+CREATE INDEX idx_model_roles_model_id ON model_roles(model_id);
+CREATE INDEX idx_model_roles_role_id ON model_roles(role_id);
 
-CREATE INDEX idx_modelpermissions_model_id ON modelPermissions(model_id);
-CREATE INDEX idx_modelpermissions_permission_id ON modelPermissions(permission_id);
+CREATE INDEX idx_model_permissions_model_id ON model_permissions(model_id);
+CREATE INDEX idx_model_permissions_permission_id ON model_permissions(permission_id);
 
+CREATE INDEX idx_role_permissions_role_id ON role_permissions(role_id);
+CREATE INDEX idx_role_permissions_permission_id ON role_permissions(permission_id);
 
-CREATE TABLE userLogs (
+-- User Logs Table → user_logs
+CREATE TABLE user_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     detail TEXT,
     changes JSONB,
@@ -124,11 +142,11 @@ $$ LANGUAGE plpgsql;
 
 -- Attach trigger
 CREATE TRIGGER trg_set_created_at_id
-BEFORE INSERT ON userLogs
+BEFORE INSERT ON user_logs
 FOR EACH ROW
 EXECUTE FUNCTION set_created_at_id();
 
-
+-- User Table Combinations → user_table_combinations
 CREATE TABLE user_table_combinations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     table_id UUID NOT NULL,
@@ -147,4 +165,3 @@ CREATE TRIGGER trg_update_user_table_combinations
 BEFORE UPDATE ON user_table_combinations
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
-
