@@ -165,3 +165,23 @@ CREATE TRIGGER trg_update_user_table_combinations
 BEFORE UPDATE ON user_table_combinations
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    token TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    is_revoked BOOLEAN NOT NULL DEFAULT false,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Indexes
+CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+CREATE INDEX idx_refresh_tokens_updated_by ON refresh_tokens(updated_by);
+
+-- Attach trigger
+CREATE TRIGGER trg_update_refresh_tokens
+BEFORE UPDATE ON refresh_tokens
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();

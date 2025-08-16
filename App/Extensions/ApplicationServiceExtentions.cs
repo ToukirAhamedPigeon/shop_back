@@ -8,6 +8,8 @@ namespace shop_back.App.Extensions
         public static IServiceCollection AddServices(this IServiceCollection services)
         {
             services.AddScoped<IProductService, ProductService>();
+            services.AddScoped<IAuthService, AuthService>();
+            
             return services;
         }
     }

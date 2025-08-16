@@ -12,6 +12,8 @@ namespace shop_back.App.Extensions
             // Register both the generic and specific repository interfaces
             services.AddScoped<IProductRepository, ProductRepository>();
             services.AddScoped<IRepository<Product, Guid>, ProductRepository>();
+            services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 
             return services;
         }

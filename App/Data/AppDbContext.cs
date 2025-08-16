@@ -13,6 +13,7 @@ namespace shop_back.App.Data
         public DbSet<ModelRole> ModelRoles { get; set; }
         public DbSet<UserLog> UserLogs { get; set; }
         public DbSet<UserTableCombination> UserTableCombinations { get; set; }
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
         // protected override void OnModelCreating(ModelBuilder modelBuilder)
         // {
         //     modelBuilder.Entity<Product>(entity =>

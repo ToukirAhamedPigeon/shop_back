@@ -1,3 +1,6 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 using DotNetEnv; // For loading variables from .env.local
 using Microsoft.EntityFrameworkCore; // For EF Core
 using shop_back.App.Data; // আপনার প্রকল্পের namespace অনুসারে পরিবর্তন করুন
@@ -49,6 +52,27 @@ builder.Services.AddServices();
 
 // Add API controllers
 builder.Services.AddControllers();
+
+// JWT Config
+var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!);
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+        ValidAudience = builder.Configuration["Jwt:Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(key)
+    };
+});
 
 // Enable Swagger/OpenAPI support
 builder.Services.AddEndpointsApiExplorer();
