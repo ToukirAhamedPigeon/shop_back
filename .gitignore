@@ -99,3 +99,15 @@ obj/Debug/net9.0/ref/shop_back.dll
 obj/Debug/net9.0/refint/shop_back.dll
 appsettings.Development.json
 appsettings.json
+
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+appsettings.Development.json
+appsettings.json
+shop_back.csproj
+shop_back.http
+shop_back.sln
+Properties/
