@@ -29,6 +29,7 @@ namespace shop_back.App.Repositories
         public async Task RevokeAsync(RefreshToken refreshToken)
         {
             refreshToken.IsRevoked = true;
+            refreshToken.UpdatedBy = refreshToken.UserId;
             _context.RefreshTokens.Update(refreshToken);
             await _context.SaveChangesAsync();
         }
@@ -44,7 +45,7 @@ namespace shop_back.App.Repositories
                 token.IsRevoked = true;
                 token.UpdatedAt = DateTime.UtcNow;
                 // optionally set UpdatedBy if you have current user id
-                // token.UpdatedBy = userId;
+                token.UpdatedBy = userId;
             }
 
             _context.RefreshTokens.UpdateRange(tokens);
@@ -55,6 +56,21 @@ namespace shop_back.App.Repositories
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();
+        }
+
+        public async Task RemoveExpiredAsync()
+        {
+            var cutoff = DateTime.UtcNow.AddDays(-7); // keep expired tokens for 7 days
+            
+            var expiredTokens = await _context.RefreshTokens
+                .Where(r => r.ExpiresAt < cutoff) 
+                .ToListAsync();
+
+            if (expiredTokens.Count > 0)
+            {
+                _context.RefreshTokens.RemoveRange(expiredTokens);
+                await _context.SaveChangesAsync();
+            }
         }
     }
 }

@@ -3,7 +3,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using DotNetEnv; // For loading variables from .env.local
 using Microsoft.EntityFrameworkCore; // For EF Core
-using shop_back.App.Data; // আপনার প্রকল্পের namespace অনুসারে পরিবর্তন করুন
+using shop_back.App.Data;
 using shop_back.App.Extensions;
 using shop_back.App.Models;
 

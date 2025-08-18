@@ -35,11 +35,15 @@ namespace shop_back.App.Services
             {
                 Token = Guid.NewGuid().ToString(),
                 UserId = user.Id,
+                UpdatedBy = user.Id,
+                UpdatedAt = DateTime.UtcNow,
                 ExpiresAt = DateTime.UtcNow.AddDays(7)
             };
 
             await _refreshTokenRepo.AddAsync(refreshToken);
             await _refreshTokenRepo.SaveChangesAsync();
+
+            await _refreshTokenRepo.RemoveExpiredAsync();
 
             return new AuthResponseDto
             {
@@ -60,22 +64,14 @@ namespace shop_back.App.Services
             var existing = await _refreshTokenRepo.GetByTokenAsync(token);
             if (existing == null || existing.ExpiresAt < DateTime.UtcNow) return null;
 
-            var newAccessToken = GenerateJwtToken(existing.User);
-            var newRefreshToken = new RefreshToken
-            {
-                Token = Guid.NewGuid().ToString(),
-                UserId = existing.UserId,
-                ExpiresAt = DateTime.UtcNow.AddDays(7)
-            };
+            await _refreshTokenRepo.RemoveExpiredAsync();
 
-            await _refreshTokenRepo.RevokeAsync(existing);
-            await _refreshTokenRepo.AddAsync(newRefreshToken);
-            await _refreshTokenRepo.SaveChangesAsync();
+            var newAccessToken = GenerateJwtToken(existing.User);
+            
 
             return new AuthResponseDto
             {
                 AccessToken = newAccessToken,
-                RefreshToken = newRefreshToken.Token,
                 User = new UserDto
                 {
                     Id = existing.User.Id,
@@ -96,6 +92,11 @@ namespace shop_back.App.Services
             }
         }
 
+        public async Task LogoutAllDevicesAsync(Guid userId)
+        {
+            await _refreshTokenRepo.RevokeAllAsync(userId);
+        }
+
         private string GenerateJwtToken(User user)
         {
             var claims = new[]
@@ -108,7 +109,7 @@ namespace shop_back.App.Services
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-            var expires = DateTime.UtcNow.AddMinutes(15);
+            var expires = DateTime.UtcNow.AddMinutes(10);
 
             var token = new JwtSecurityToken(
                 issuer: _config["Jwt:Issuer"],
@@ -117,7 +118,6 @@ namespace shop_back.App.Services
                 expires: expires,
                 signingCredentials: creds
             );
-
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
     }

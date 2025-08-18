@@ -9,5 +9,6 @@ namespace shop_back.App.Repositories
         Task RevokeAsync(RefreshToken refreshToken);
         Task RevokeAllAsync(Guid userId);
         Task SaveChangesAsync();
+        Task RemoveExpiredAsync();
     }
 }

@@ -8,5 +8,7 @@ namespace shop_back.App.Services
         Task<AuthResponseDto?> LoginAsync(LoginRequestDto loginDto); // fixed return type
         Task<AuthResponseDto?> RefreshTokenAsync(string refreshToken);
         Task LogoutAsync(string token); // bool not needed
+
+        Task LogoutAllDevicesAsync(Guid userId);
     }
 }
