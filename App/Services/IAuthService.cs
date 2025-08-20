@@ -10,5 +10,6 @@ namespace shop_back.App.Services
         Task LogoutAsync(string token); // bool not needed
 
         Task LogoutAllDevicesAsync(Guid userId);
+        Task LogoutOtherDevicesAsync(string exceptRefreshToken, Guid userId);
     }
 }

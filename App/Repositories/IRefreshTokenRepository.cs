@@ -8,6 +8,7 @@ namespace shop_back.App.Repositories
         Task AddAsync(RefreshToken refreshToken);
         Task RevokeAsync(RefreshToken refreshToken);
         Task RevokeAllAsync(Guid userId);
+        Task RevokeOtherAsync(string exceptRefreshToken, Guid userId);
         Task SaveChangesAsync();
         Task RemoveExpiredAsync();
     }

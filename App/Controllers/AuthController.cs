@@ -36,7 +36,7 @@ namespace shop_back.App.Controllers
             result.RefreshToken = string.Empty;
             return Ok(result);
         }
-        
+
         [HttpPost("refresh")]
         public async Task<IActionResult> Refresh()
         {
@@ -59,13 +59,25 @@ namespace shop_back.App.Controllers
 
             return Ok(new { message = "Logged out successfully" });
         }
-        
+
         [Authorize]
         [HttpPost("logout-all")]
         public async Task<IActionResult> LogoutAll()
         {
             var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             await _authService.LogoutAllDevicesAsync(userId);
+            return Ok(new { message = "Logged out from all devices" });
+        }
+        
+        [Authorize]
+        [HttpPost("logout-others")]
+        public async Task<IActionResult> LogoutOthers()
+        {
+            if (Request.Cookies.TryGetValue("refreshToken", out var refreshToken))
+            {
+                var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                await _authService.LogoutOtherDevicesAsync(refreshToken,userId); // revoke the token
+            }
             return Ok(new { message = "Logged out from all devices" });
         }
     }

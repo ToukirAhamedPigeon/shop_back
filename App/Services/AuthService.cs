@@ -15,12 +15,14 @@ namespace shop_back.App.Services
     {
         private readonly IUserRepository _userRepo;
         private readonly IRefreshTokenRepository _refreshTokenRepo;
+        private readonly IRolePermissionRepository _rolePermissionRepo;
         private readonly IConfiguration _config;
 
-        public AuthService(IUserRepository userRepo, IRefreshTokenRepository refreshTokenRepo, IConfiguration config)
+        public AuthService(IUserRepository userRepo, IRefreshTokenRepository refreshTokenRepo, IRolePermissionRepository rolePermissionRepo, IConfiguration config)
         {
             _userRepo = userRepo;
             _refreshTokenRepo = refreshTokenRepo;
+            _rolePermissionRepo = rolePermissionRepo;
             _config = config;
         }
 
@@ -97,14 +99,23 @@ namespace shop_back.App.Services
             await _refreshTokenRepo.RevokeAllAsync(userId);
         }
 
+        public async Task LogoutOtherDevicesAsync(string exceptRefreshToken, Guid userId)
+        {
+            await _refreshTokenRepo.RevokeOtherAsync(exceptRefreshToken,userId);
+        }
+
         private string GenerateJwtToken(User user)
         {
+            var userRoles= _rolePermissionRepo.GetRolePermissionsByUserIdAsync(user.Id);
+            var userPermissions= _rolePermissionRepo.GetAllPermissionsByUserIdAsync(user.Id);
             var claims = new[]
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.UniqueName, user.Username),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim("mobile_no", user.MobileNo)
+                new Claim("mobile_no", user.MobileNo),
+                new Claim("user_roles", userRoles.Result != null ? string.Join(",", userRoles.Result) : ""),
+                new Claim("user_permissions", userPermissions.Result != null ? string.Join(",", userPermissions.Result) : ""),
             };
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));

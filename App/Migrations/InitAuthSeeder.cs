@@ -22,7 +22,7 @@ using BCrypt.Net; // For password hashing
                 var devRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == "developer");
                 if (devRole == null)
                 {
-                    devRole = new Role { Name = "developer", GuardName = "user" };
+                    devRole = new Role { Name = "developer", GuardName = "admin" };
                     context.Roles.Add(devRole);
                     await context.SaveChangesAsync();
                 }
@@ -31,7 +31,7 @@ using BCrypt.Net; // For password hashing
                 var readDashboard = await context.Permissions.FirstOrDefaultAsync(p => p.Name == "read-admin-dashboard");
                 if (readDashboard == null)
                 {
-                    readDashboard = new Permission { Name = "read-admin-dashboard", GuardName = "user" };
+                    readDashboard = new Permission { Name = "read-admin-dashboard", GuardName = "admin" };
                     context.Permissions.Add(readDashboard);
                     await context.SaveChangesAsync();
                 }

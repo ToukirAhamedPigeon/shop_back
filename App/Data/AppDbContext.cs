@@ -11,6 +11,7 @@ namespace shop_back.App.Data
         public DbSet<Permission> Permissions { get; set; }
         public DbSet<RolePermission> RolePermissions { get; set; }
         public DbSet<ModelRole> ModelRoles { get; set; }
+        public DbSet<ModelPermission> ModelPermissions { get; set; }
         public DbSet<UserLog> UserLogs { get; set; }
         public DbSet<UserTableCombination> UserTableCombinations { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }

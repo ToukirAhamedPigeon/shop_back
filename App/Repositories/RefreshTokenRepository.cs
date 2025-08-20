@@ -52,6 +52,24 @@ namespace shop_back.App.Repositories
             await _context.SaveChangesAsync();
         }
 
+         public async Task RevokeOtherAsync(string exceptRefreshToken, Guid userId)
+        {
+            var tokens = await _context.RefreshTokens
+                .Where(r => r.UserId == userId && !r.IsRevoked && r.Token != exceptRefreshToken)
+                .ToListAsync();
+
+            foreach (var token in tokens)
+            {
+                token.IsRevoked = true;
+                token.UpdatedAt = DateTime.UtcNow;
+                // optionally set UpdatedBy if you have current user id
+                token.UpdatedBy = userId;
+            }
+
+            _context.RefreshTokens.UpdateRange(tokens);
+            await _context.SaveChangesAsync();
+        }
+
 
         public async Task SaveChangesAsync()
         {
