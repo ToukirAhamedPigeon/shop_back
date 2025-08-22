@@ -1,32 +1,40 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.EntityFrameworkCore;
+using DotNetEnv; // For loading environment variables
 using System.Text;
-using DotNetEnv; // For loading variables from .env.local
-using Microsoft.EntityFrameworkCore; // For EF Core
 using shop_back.App.Data;
 using shop_back.App.Extensions;
+using shop_back.App.Middlewares; // CsrfValidationMiddleware
 using shop_back.App.Models;
 
-// Load .env.local only if it exists (for local development)
 try
 {
+    // Load .env.local for local development (ignored in production/Docker)
     Env.Load(".env.local");
 }
 catch
 {
-    // .env.local might not exist in Docker, ignore if not found
+    // .env.local might not exist, ignore
 }
 
+// Build the WebApplication
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Kestrel to listen on port 5000
+// ----------------------------
+// Kestrel Configuration
+// ----------------------------
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ListenAnyIP(5000);
+    options.ListenAnyIP(5000); // Listen on port 5000
 });
 
-// Get connection string from environment variable or .env.local
-string connStr = Environment.GetEnvironmentVariable("DefaultConnection") ?? Env.GetString("DefaultConnection");
+// ----------------------------
+// Database Configuration
+// ----------------------------
+string connStr = Environment.GetEnvironmentVariable("DefaultConnection") 
+                 ?? Env.GetString("DefaultConnection");
 
 if (!string.IsNullOrEmpty(connStr))
 {
@@ -34,26 +42,27 @@ if (!string.IsNullOrEmpty(connStr))
 }
 else
 {
-    Console.WriteLine("⚠️ Warning: DefaultConnection string not set in environment or .env.local");
+    Console.WriteLine("⚠️ Warning: DefaultConnection string not set");
 }
 
-// Load allowed CORS origins from config or fallback to empty array
-var allowedOrigins = builder.Configuration
-    .GetSection("Cors:AllowedOrigins")
-    .Get<string[]>() ?? Array.Empty<string>();
-
-// Register DbContext with PostgreSQL using connection string
+// Register EF Core DbContext
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Register repository and service layers
+// ----------------------------
+// Repositories and Services
+// ----------------------------
 builder.Services.AddRepositories();
 builder.Services.AddServices();
 
-// Add API controllers
+// ----------------------------
+// Controllers
+// ----------------------------
 builder.Services.AddControllers();
 
-// JWT Config
+// ----------------------------
+// JWT Authentication
+// ----------------------------
 var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!);
 
 builder.Services.AddAuthentication(options =>
@@ -74,11 +83,32 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// Enable Swagger/OpenAPI support
+// ----------------------------
+// CSRF Protection
+// ----------------------------
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-CSRF-TOKEN"; // SPA sends this header
+    options.Cookie.Name = "X-CSRF-COOKIE"; // HttpOnly cookie
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // HTTPS only
+    options.Cookie.SameSite = SameSiteMode.Strict; // Prevent cross-site
+    options.SuppressXFrameOptionsHeader = false;
+});
+
+// ----------------------------
+// Swagger/OpenAPI
+// ----------------------------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Define CORS policy named "AllowFrontend"
+// ----------------------------
+// CORS Policy
+// ----------------------------
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>() ?? Array.Empty<string>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
@@ -99,45 +129,46 @@ builder.Services.AddCors(options =>
     });
 });
 
+// ----------------------------
+// Build App
+// ----------------------------
 var app = builder.Build();
 
-// Test DB connection on startup (optional)
+// ----------------------------
+// Optional: Test DB Connection
+// ----------------------------
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     Console.WriteLine("✅ Connected to DB: " + db.Database.CanConnect());
 }
 
+// ----------------------------
+// Middleware Pipeline
+// ----------------------------
+
 // Enable Swagger UI
 app.UseSwagger();
 app.UseSwaggerUI();
 
-// Routing must come before middleware like CORS and Authorization
+// Routing
 app.UseRouting();
 
-// Apply CORS middleware BEFORE Authorization
+// Apply CORS
 app.UseCors("AllowFrontend");
 
-// Authorization middleware
+// Authentication and Authorization
+app.UseAuthentication();
 app.UseAuthorization();
 
-// Auth Seeder
-// using (var scope = app.Services.CreateScope())
-// {
-//     var services = scope.ServiceProvider;
-//     try
-//     {
-//         await InitAuthSeeder.Seed(services);
-//         Console.WriteLine("Authentication seed completed.");
-//     }
-//     catch (Exception ex)
-//     {
-//         Console.WriteLine($"Seeding failed: {ex.Message}");
-//     }
-// }
+// ----------------------------
+// CSRF Validation Middleware
+// Must be added after Authentication and before Controllers
+// ----------------------------
+app.UseMiddleware<CsrfValidationMiddleware>();
 
-// Map controller routes (API endpoints)
+// Map controller endpoints
 app.MapControllers();
 
-// Run the application
+// Run application
 app.Run();
