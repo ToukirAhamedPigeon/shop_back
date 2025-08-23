@@ -51,6 +51,7 @@ namespace shop_back.App.Controllers
         /// Issues a new access token using the refresh token stored in cookie.
         /// </summary>
         [HttpPost("refresh")]
+        [AllowAnonymous]
         public async Task<IActionResult> Refresh()
         {
             var refreshToken = Request.Cookies["refreshToken"];
