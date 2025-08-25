@@ -32,26 +32,30 @@ namespace shop_back.App.Controllers
             var result = await _authService.LoginAsync(request);
             if (result == null) return Unauthorized("Invalid credentials");
 
-            // Store refresh token securely in HttpOnly cookie
+            var expiry = DateTime.UtcNow.AddDays(7); // same as cookie expiry
+
             Response.Cookies.Append("refreshToken", result.RefreshToken!, new CookieOptions
             {
-                HttpOnly = true, // not accessible by JS
-                Secure = true,   // must be true in production (HTTPS)
-                SameSite = SameSiteMode.Strict, // prevents CSRF in browsers
-                Expires = DateTime.UtcNow.AddDays(7)
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                Expires = expiry
             });
 
-            // Optional: prevent leaking refresh token in response body
-            result.RefreshToken = string.Empty;
+            result.RefreshToken = string.Empty; // don't send actual token
 
-            return Ok(result);
+            return Ok(new
+            {
+                result.User,
+                result.AccessToken,
+                RefreshTokenExpiry = expiry
+            });
         }
 
         /// <summary>
         /// Issues a new access token using the refresh token stored in cookie.
         /// </summary>
         [HttpPost("refresh")]
-        [AllowAnonymous]
         public async Task<IActionResult> Refresh()
         {
             var refreshToken = Request.Cookies["refreshToken"];
@@ -62,7 +66,15 @@ namespace shop_back.App.Controllers
             if (result == null)
                 return Unauthorized("Invalid refresh token");
 
-            return Ok(result);
+            // keep expiry consistent
+            var expiry = DateTime.UtcNow.AddDays(7);
+
+            return Ok(new
+            {
+                result.User,
+                result.AccessToken,
+                RefreshTokenExpiry = expiry
+            });
         }
 
         /// <summary>
