@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using shop_back.App.Models;
 using shop_back.App.DTOs;
 using shop_back.App.Services;
+using shop_back.App.Authorization;
 
 namespace shop_back.App.Controllers
 {
@@ -11,6 +12,8 @@ namespace shop_back.App.Controllers
     {
         // POST: /api/products/get-all
         [HttpPost("get-all")]
+        // [HasPermissionAny("admin:create-product", "admin:edit-product")]
+        // [HasPermissionAll("admin:delete-product", "admin:hard-delete")]
         public async Task<ActionResult<IEnumerable<Product>>> GetAllProducts([FromBody] ProductFilterDto filter)
         {
             var products = await _productService.GetFilteredAsync(filter);

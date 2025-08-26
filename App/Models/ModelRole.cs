@@ -10,12 +10,15 @@ namespace shop_back.App.Models
         [Column("id")]
         public Guid Id { get; set; } = Guid.NewGuid();
 
+        [Required]
         [Column("model_id")]
         public Guid ModelId { get; set; }
 
+        [Required]
         [Column("role_id")]
-        public Guid? RoleId { get; set; }
+        public Guid RoleId { get; set; }
 
+        [Required]
         [Column("model_name")]
         public string ModelName { get; set; } = "User";
 
@@ -24,5 +27,9 @@ namespace shop_back.App.Models
 
         [Column("updated_at")]
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        // 🔗 Navigation
+        [ForeignKey("RoleId")]
+        public virtual Role? Role { get; set; }
     }
 }

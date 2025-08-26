@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.EntityFrameworkCore;
 using DotNetEnv;
@@ -7,10 +8,10 @@ using System.Text;
 using shop_back.App.Data;
 using shop_back.App.Extensions;
 using shop_back.App.Middlewares;
+using shop_back.App.Authorization;
 
 try { Env.Load(".env.local"); } catch { }
 
-// Build WebApplication
 var builder = WebApplication.CreateBuilder(args);
 
 // Database
@@ -51,9 +52,9 @@ builder.Services.AddAuthentication(options =>
 // CSRF / XSRF Protection
 builder.Services.AddAntiforgery(options =>
 {
-    options.HeaderName = "X-CSRF-TOKEN"; // SPA sends this header
-    options.Cookie.Name = "XSRF-TOKEN";   // JS-readable cookie
-    options.Cookie.HttpOnly = false;      // JS can read it
+    options.HeaderName = "X-CSRF-TOKEN";
+    options.Cookie.Name = "XSRF-TOKEN";
+    options.Cookie.HttpOnly = false;
     options.Cookie.SameSite = SameSiteMode.Lax;
 #if DEBUG
     options.Cookie.SecurePolicy = CookieSecurePolicy.None;
@@ -62,7 +63,18 @@ builder.Services.AddAntiforgery(options =>
 #endif
 });
 
-// Swagger / OpenAPI
+// 🔑 Add Authorization with custom permission handler
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("DynamicPermission", policy =>
+        policy.Requirements.Add(new PermissionRequirement(new List<string>(), PermissionRelation.Or))
+    );
+});
+
+builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
+builder.Services.AddHttpContextAccessor();
+
+// Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -96,7 +108,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // CSRF + JWT Middleware
-// Ensure the middleware skips CSRF for endpoints with JWT or AllowAnonymous
 app.UseMiddleware<CsrfAndJwtMiddleware>();
 
 app.UseSwagger();
@@ -104,7 +115,7 @@ app.UseSwaggerUI();
 
 app.MapControllers();
 
-// Test DB Connection
+// DB Test
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

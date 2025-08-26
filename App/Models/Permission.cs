@@ -22,5 +22,9 @@ namespace shop_back.App.Models
 
         [Column("updated_at")]
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        // 🔗 Navigation: One permission can belong to many RolePermissions and ModelPermissions
+        public virtual ICollection<RolePermission> RolePermissions { get; set; } = new List<RolePermission>();
+        public virtual ICollection<ModelPermission> ModelPermissions { get; set; } = new List<ModelPermission>();
     }
 }

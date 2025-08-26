@@ -21,5 +21,12 @@ namespace shop_back.App.Models
 
         [Column("updated_at")]
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        // 🔗 Navigation
+        [ForeignKey("PermissionId")]
+        public virtual Permission? Permission { get; set; }
+
+        [ForeignKey("RoleId")]
+        public virtual Role? Role { get; set; }
     }
 }
