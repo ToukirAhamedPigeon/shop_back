@@ -65,6 +65,8 @@ namespace shop_back.App.Controllers
             var result = await _authService.RefreshTokenAsync(refreshToken);
             if (result == null)
                 return Unauthorized("Invalid refresh token");
+            if (result?.User == null || !result.User.IsActive)
+                return Unauthorized("User is inactive");
 
             // keep expiry consistent
             var expiry = DateTime.UtcNow.AddDays(7);

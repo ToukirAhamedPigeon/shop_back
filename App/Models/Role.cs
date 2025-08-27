@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -16,6 +18,12 @@ namespace shop_back.App.Models
 
         [Column("guard_name")]
         public string GuardName { get; set; } = "admin";
+
+        [Column("is_active")]
+        public bool IsActive { get; set; } = true;
+
+        [Column("is_deleted")]
+        public bool IsDeleted { get; set; } = false;
 
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

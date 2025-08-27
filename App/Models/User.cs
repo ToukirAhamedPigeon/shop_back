@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -29,6 +30,12 @@ namespace shop_back.App.Models
         [Required]
         [Column("mobile_no")]
         public string MobileNo { get; set; } = string.Empty;
+
+        [Column("is_active")]
+        public bool IsActive { get; set; } = true;
+
+        [Column("is_deleted")]
+        public bool IsDeleted { get; set; } = false;
 
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

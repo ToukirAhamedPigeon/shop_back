@@ -2,15 +2,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
 using shop_back.App.Data;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Claims;
-using System.Threading.Tasks;
 
 namespace shop_back.App.Authorization
 {
-
     public class PermissionFilter : IAsyncActionFilter
     {
         private readonly AppDbContext _db;
@@ -36,43 +31,42 @@ namespace shop_back.App.Authorization
                 return;
             }
 
-            // 2️⃣ Fetch direct user permissions (null-safe)
+            // 2️⃣ Fetch direct user permissions (active only)
             var userPermissions = await _db.ModelPermissions
                 .Include(mp => mp.Permission)
-                .Where(mp => mp.ModelId.ToString() == userId && mp.Permission != null)
+                .Where(mp => mp.ModelId.ToString() == userId &&
+                             mp.Permission != null &&
+                             mp.Permission.IsActive && !mp.Permission.IsDeleted)
                 .Select(mp => $"{mp.Permission!.GuardName}:{mp.Permission!.Name}")
                 .ToListAsync();
 
-            // 3️⃣ Fetch role-based permissions (null-safe)
-            // Fetch role-based permissions safely
+            // 3️⃣ Fetch role-based permissions (active only)
             var rolePermissions = await _db.ModelRoles
-            .Include(mr => mr.Role)
-                .ThenInclude(r => r!.RolePermissions)
-                    .ThenInclude(rp => rp.Permission)
-            .Where(mr => mr.ModelId.ToString() == userId && mr.Role != null)
-            .SelectMany(mr => mr.Role != null
-                ? mr.Role.RolePermissions
-                    .Where(rp => rp.Permission != null)
+                .Include(mr => mr.Role)
+                    .ThenInclude(r => r!.RolePermissions)
+                        .ThenInclude(rp => rp.Permission)
+                .Where(mr => mr.ModelId.ToString() == userId &&
+                             mr.Role != null &&
+                             mr.Role.IsActive && !mr.Role.IsDeleted)
+                .SelectMany(mr => mr.Role!.RolePermissions
+                    .Where(rp => rp.Permission != null &&
+                                 rp.Permission.IsActive && !rp.Permission.IsDeleted)
                     .Select(rp => new 
                     { 
                         GuardName = rp.Permission!.GuardName,
                         Name = rp.Permission!.Name
-                    })
-                : Enumerable.Empty<dynamic>() // return empty if Role is null
-            )
-            .ToListAsync();
+                    }))
+                .ToListAsync();
 
-    // Convert to string format
-    // Convert rolePermissions to string format first
-    var rolePermissionStrings = rolePermissions
-        .Select(rp => $"{rp.GuardName}:{rp.Name}")
-        .ToList();
+            var rolePermissionStrings = rolePermissions
+                .Select(rp => $"{rp.GuardName}:{rp.Name}")
+                .ToList();
 
-    // Merge all permissions safely
-    var allPermissions = userPermissions
-        .Concat(rolePermissionStrings) // now both are List<string>
-        .Distinct()
-        .ToList();
+            // 4️⃣ Merge permissions
+            var allPermissions = userPermissions
+                .Concat(rolePermissionStrings)
+                .Distinct()
+                .ToList();
 
             // 5️⃣ Evaluate based on PermissionRelation
             bool authorized = _relation switch

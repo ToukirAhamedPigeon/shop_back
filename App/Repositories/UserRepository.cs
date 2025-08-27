@@ -16,6 +16,7 @@ namespace shop_back.App.Repositories
         public async Task<User?> GetByIdentifierAsync(string identifier)
         {
             return await _context.Users
+                .Where(u => !u.IsDeleted)
                 .FirstOrDefaultAsync(u =>
                     u.Username == identifier ||
                     u.Email == identifier ||

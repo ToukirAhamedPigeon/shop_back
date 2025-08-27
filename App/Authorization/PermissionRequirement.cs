@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Authorization;
-using System.Collections.Generic;
 
 namespace shop_back.App.Authorization
 {
