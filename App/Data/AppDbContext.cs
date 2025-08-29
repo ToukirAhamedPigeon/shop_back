@@ -15,6 +15,8 @@ namespace shop_back.App.Data
         public DbSet<UserLog> UserLogs { get; set; }
         public DbSet<UserTableCombination> UserTableCombinations { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
+        public DbSet<TranslationKey> TranslationKeys { get; set; }
+        public DbSet<TranslationValue> TranslationValues { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -47,6 +49,20 @@ namespace shop_back.App.Data
                 .HasOne(mp => mp.Permission)
                 .WithMany(p => p.ModelPermissions)
                 .HasForeignKey(mp => mp.PermissionId);
+
+            modelBuilder.Entity<TranslationKey>()
+                .HasIndex(k => new { k.Module, k.Key })
+                .IsUnique();
+
+            modelBuilder.Entity<TranslationValue>()
+                .HasIndex(v => new { v.KeyId, v.Lang })
+                .IsUnique();
+
+            modelBuilder.Entity<TranslationValue>()
+                .HasOne(v => v.Key)
+                .WithMany(k => k.Values)
+                .HasForeignKey(v => v.KeyId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

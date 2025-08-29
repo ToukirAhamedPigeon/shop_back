@@ -54,6 +54,7 @@ namespace shop_back.App.Middlewares
 
             // For authenticated endpoints, check JWT if needed
             if (!context.Request.Path.StartsWithSegments("/api/csrf/token") &&
+                !context.Request.Path.StartsWithSegments("/api/translations/get") &&
                 !context.Request.Path.StartsWithSegments("/api/auth/login") &&
                 !context.Request.Path.StartsWithSegments("/api/auth/refresh") &&
                 !hasJwt)

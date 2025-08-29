@@ -15,6 +15,7 @@ namespace shop_back.App.Extensions
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
             services.AddScoped <IRolePermissionRepository, RolePermissionRepository>();
+            services.AddScoped<ITranslationRepository, TranslationRepository>();
             return services;
         }
     }

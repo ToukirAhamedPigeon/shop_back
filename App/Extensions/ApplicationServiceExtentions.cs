@@ -9,7 +9,7 @@ namespace shop_back.App.Extensions
         {
             services.AddScoped<IProductService, ProductService>();
             services.AddScoped<IAuthService, AuthService>();
-            
+            services.AddScoped<ITranslationService, TranslationService>();
             return services;
         }
     }

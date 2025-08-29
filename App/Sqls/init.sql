@@ -201,3 +201,25 @@ ALTER TABLE permissions
 ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE,
 ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
 
+
+-- translation key (module helps namespace)
+CREATE TABLE public.translation_keys (
+  id bigserial PRIMARY KEY,
+  key text NOT NULL,                -- e.g. "welcome.title"
+  module text NOT NULL DEFAULT 'common',
+  created_at timestamptz DEFAULT now(),
+  UNIQUE (module, key)
+);
+
+-- translation values
+CREATE TABLE public.translation_values (
+  id bigserial PRIMARY KEY,
+  key_id bigint NOT NULL REFERENCES public.translation_keys(id) ON DELETE CASCADE,
+  lang varchar(10) NOT NULL,        -- 'en', 'bn', ...
+  value text NOT NULL,              -- plain string or JSON (if you store plural forms)
+  created_at timestamptz DEFAULT now(),
+  UNIQUE (key_id, lang)
+);
+
+-- index for quick lookups by lang
+CREATE INDEX idx_translation_values_lang ON public.translation_values (lang);
