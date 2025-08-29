@@ -6,6 +6,6 @@ namespace shop_back.App.Services
     public interface ITranslationService
     {
         /// <summary>Get flattened map of key -> value for requested lang & optional module.</summary>
-        Task<IDictionary<string,string>> GetTranslationsAsync(string lang, string? module = null, CancellationToken ct = default);
+        Task<IDictionary<string,string>> GetTranslationsAsync(string lang, string? module = null, bool forceDbFetch = false, CancellationToken ct = default);
     }
 }

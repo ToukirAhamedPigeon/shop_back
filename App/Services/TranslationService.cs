@@ -18,23 +18,39 @@ namespace shop_back.App.Services
             _cache = redis.GetDatabase();
         }
 
-        private static string CacheKey(string lang, string? module) => $"translations:{lang}:{module ?? "common"}";
+        private static string CacheKey(string lang, string? module) =>
+            $"translations:{lang}:{module ?? "common"}";
 
-        public async Task<IDictionary<string, string>> GetTranslationsAsync(string lang, string? module = null, CancellationToken ct = default)
+        /// <summary>
+        /// Get translations for a given language and module.
+        /// </summary>
+        /// <param name="lang">Language code (e.g., "en")</param>
+        /// <param name="module">Optional module name</param>
+        /// <param name="forceDbFetch">If true, bypass cache and fetch from DB</param>
+        public async Task<IDictionary<string, string>> GetTranslationsAsync(
+            string lang,
+            string? module = null,
+            bool forceDbFetch = false,
+            CancellationToken ct = default)
         {
             var cacheKey = CacheKey(lang, module);
-            // 1. Try cache
-            var cached = await _cache.StringGetAsync(cacheKey);
-            if (cached.HasValue)
+
+            // 1️⃣ Try cache only if not forcing DB fetch
+            if (!forceDbFetch)
             {
-                return JsonSerializer.Deserialize<Dictionary<string, string>>(cached!) ?? new Dictionary<string,string>();
+                var cached = await _cache.StringGetAsync(cacheKey);
+                if (cached.HasValue)
+                {
+                    return JsonSerializer.Deserialize<Dictionary<string, string>>(cached!) 
+                           ?? new Dictionary<string, string>();
+                }
             }
 
-            // 2. Read from DB
+            // 2️⃣ Read from DB
             var rows = await _repo.GetByLangAsync(lang, module, ct);
             var map = rows.ToDictionary(r => $"{r.Key.Module}.{r.Key.Key}", r => r.Value);
 
-            // 3. Cache the result
+            // 3️⃣ Cache the result (update cache)
             var serialized = JsonSerializer.Serialize(map);
             await _cache.StringSetAsync(cacheKey, serialized, _cacheTtl);
 
