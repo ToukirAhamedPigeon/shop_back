@@ -11,6 +11,7 @@ using shop_back.src.Shared.Infrastructure.Middlewares;
 using shop_back.src.Shared.Application.Authorization;
 using shop_back.src.Shared.Domain.Enums;
 using shop_back.src.Shared.Application;
+using shop_back.src.Shared.Application.Repositories;
 using StackExchange.Redis;
 
 try { Env.Load(); } catch { }
@@ -51,13 +52,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAntiforgery(o =>
+builder.Services.AddAntiforgery(options =>
 {
-    o.HeaderName = "X-CSRF-TOKEN";
-    o.Cookie.Name = "XSRF-TOKEN";
-    o.Cookie.HttpOnly = false;
-    o.Cookie.SameSite = SameSiteMode.Lax;
-    o.Cookie.SecurePolicy = CookieSecurePolicy.None;
+    options.HeaderName = "X-CSRF-TOKEN";
+    options.Cookie.Name = "XSRF-TOKEN";
+    options.Cookie.HttpOnly = false;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+#if DEBUG
+    options.Cookie.SecurePolicy = CookieSecurePolicy.None;
+#else
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+#endif
 });
 
 // Authorization Policies
@@ -75,14 +80,23 @@ builder.Services.AddCors(p =>
 {
     p.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:3000")
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+        policy.WithOrigins(
+            "http://localhost:5173",
+            "http://localhost:5174",
+            "http://localhost:4200",
+            "http://localhost:3000"
+        )
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials();
     });
 });
 
 var app = builder.Build();
+
+#if !DEBUG
+app.UseHttpsRedirection();
+#endif
 
 app.UseRouting();
 app.UseCors("AllowFrontend");

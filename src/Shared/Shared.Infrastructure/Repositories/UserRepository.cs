@@ -16,12 +16,15 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
 
         public async Task<User?> GetByIdentifierAsync(string identifier)
         {
+            // ✅ Correction:
+            // Merged the `Where(u => !u.IsDeleted)` and `FirstOrDefaultAsync(...)`
+            // into a single predicate so EF Core can fully translate to SQL
             return await _context.Users
-                .Where(u => !u.IsDeleted)
                 .FirstOrDefaultAsync(u =>
-                    u.Username == identifier ||
-                    u.Email == identifier ||
-                    u.MobileNo == identifier);
+                    !u.IsDeleted && 
+                    (u.Username == identifier ||
+                     u.Email == identifier ||
+                     u.MobileNo == identifier));
         }
     }
 }

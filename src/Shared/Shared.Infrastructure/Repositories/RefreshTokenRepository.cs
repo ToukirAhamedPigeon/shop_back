@@ -18,6 +18,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
         {
             return await _context.RefreshTokens
                 .Include(r => r.User)
+                .AsNoTracking()
                 .FirstOrDefaultAsync(r => r.Token == token && !r.IsRevoked);
         }
 
@@ -30,7 +31,9 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
         public async Task RevokeAsync(RefreshToken refreshToken)
         {
             refreshToken.IsRevoked = true;
+            refreshToken.UpdatedAt = DateTime.UtcNow;
             refreshToken.UpdatedBy = refreshToken.UserId;
+
             _context.RefreshTokens.Update(refreshToken);
             await _context.SaveChangesAsync();
         }
@@ -41,11 +44,12 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 .Where(r => r.UserId == userId && !r.IsRevoked)
                 .ToListAsync();
 
+            if (tokens.Count == 0) return;
+
             foreach (var token in tokens)
             {
                 token.IsRevoked = true;
                 token.UpdatedAt = DateTime.UtcNow;
-                // optionally set UpdatedBy if you have current user id
                 token.UpdatedBy = userId;
             }
 
@@ -53,17 +57,18 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             await _context.SaveChangesAsync();
         }
 
-         public async Task RevokeOtherAsync(string exceptRefreshToken, Guid userId)
+        public async Task RevokeOtherAsync(string exceptRefreshToken, Guid userId)
         {
             var tokens = await _context.RefreshTokens
                 .Where(r => r.UserId == userId && !r.IsRevoked && r.Token != exceptRefreshToken)
                 .ToListAsync();
 
+            if (tokens.Count == 0) return;
+
             foreach (var token in tokens)
             {
                 token.IsRevoked = true;
                 token.UpdatedAt = DateTime.UtcNow;
-                // optionally set UpdatedBy if you have current user id
                 token.UpdatedBy = userId;
             }
 
@@ -71,25 +76,23 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             await _context.SaveChangesAsync();
         }
 
+        public async Task RemoveExpiredAsync()
+        {
+            var cutoff = DateTime.UtcNow; // strictly expired tokens
+
+            var expiredTokens = await _context.RefreshTokens
+                .Where(r => r.ExpiresAt < cutoff)
+                .ToListAsync();
+
+            if (expiredTokens.Count == 0) return;
+
+            _context.RefreshTokens.RemoveRange(expiredTokens);
+            await _context.SaveChangesAsync();
+        }
 
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();
-        }
-
-        public async Task RemoveExpiredAsync()
-        {
-            var cutoff = DateTime.UtcNow.AddDays(-7); // keep expired tokens for 7 days
-            
-            var expiredTokens = await _context.RefreshTokens
-                .Where(r => r.ExpiresAt < cutoff) 
-                .ToListAsync();
-
-            if (expiredTokens.Count > 0)
-            {
-                _context.RefreshTokens.RemoveRange(expiredTokens);
-                await _context.SaveChangesAsync();
-            }
         }
     }
 }

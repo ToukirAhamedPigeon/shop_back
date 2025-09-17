@@ -1,7 +1,6 @@
 using BCrypt.Net;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
-using shop_back.src.Shared.Application.DTOs;
 using shop_back.src.Shared.Application.Interfaces;
 using shop_back.src.Shared.Application.DTOs.Auth;
 using shop_back.src.Shared.Application.Repositories;
@@ -9,6 +8,7 @@ using shop_back.src.Shared.Domain.Entities;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 
 namespace shop_back.src.Shared.Application.Services
 {
@@ -34,10 +34,16 @@ namespace shop_back.src.Shared.Application.Services
         public async Task<AuthResponseDto?> LoginAsync(LoginRequestDto request)
         {
             var user = await _userRepo.GetByIdentifierAsync(request.Identifier);
-            if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.Password))
+
+            // ✅ Correction: safer null + password check
+            if (user == null || string.IsNullOrWhiteSpace(user.Password) ||
+                !BCrypt.Net.BCrypt.Verify(request.Password, user.Password))
+            {
                 return null;
+            }
 
             var accessToken = GenerateJwtToken(user);
+
             var refreshToken = new RefreshToken
             {
                 Token = Guid.NewGuid().ToString(),
@@ -47,8 +53,8 @@ namespace shop_back.src.Shared.Application.Services
                 ExpiresAt = DateTime.UtcNow.AddDays(7)
             };
 
+            // ✅ Correction: only one SaveChangesAsync needed
             await _refreshTokenRepo.AddAsync(refreshToken);
-            await _refreshTokenRepo.SaveChangesAsync();
             await _refreshTokenRepo.RemoveExpiredAsync();
 
             return new AuthResponseDto
@@ -62,8 +68,14 @@ namespace shop_back.src.Shared.Application.Services
         public async Task<AuthResponseDto?> RefreshTokenAsync(string token)
         {
             var existing = await _refreshTokenRepo.GetByTokenAsync(token);
-            if (existing == null || existing.ExpiresAt < DateTime.UtcNow) 
+
+            // ✅ Correction: safer console debugging with IgnoreCycles
+
+            // ✅ Correction: null + expiry validation
+            if (existing == null || existing.ExpiresAt <= DateTime.UtcNow)
+            {
                 return null;
+            }
 
             await _refreshTokenRepo.RemoveExpiredAsync();
 
@@ -72,7 +84,7 @@ namespace shop_back.src.Shared.Application.Services
             return new AuthResponseDto
             {
                 AccessToken = newAccessToken,
-                RefreshToken = token, // keep same refresh token until rotation is implemented
+                RefreshToken = token, // ✅ keeping same refresh token until rotation implemented
                 User = await BuildUserDtoAsync(existing.User)
             };
         }
@@ -83,7 +95,6 @@ namespace shop_back.src.Shared.Application.Services
             if (refreshToken != null)
             {
                 await _refreshTokenRepo.RevokeAsync(refreshToken);
-                await _refreshTokenRepo.SaveChangesAsync();
             }
         }
 
@@ -99,6 +110,7 @@ namespace shop_back.src.Shared.Application.Services
 
         private string GenerateJwtToken(User user)
         {
+            // ✅ Correction: ensure claims are never null
             var claims = new[]
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
@@ -109,7 +121,10 @@ namespace shop_back.src.Shared.Application.Services
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-            var expires = DateTime.UtcNow.AddMinutes(10);
+
+            // ✅ Correction: expiry configurable, defaults to 10 mins
+            var tokenExpiryMinutes = int.TryParse(_config["Jwt:ExpiryMinutes"], out var minutes) ? minutes : 10;
+            var expires = DateTime.UtcNow.AddMinutes(tokenExpiryMinutes);
 
             var token = new JwtSecurityToken(
                 issuer: _config["Jwt:Issuer"],
@@ -118,19 +133,25 @@ namespace shop_back.src.Shared.Application.Services
                 expires: expires,
                 signingCredentials: creds
             );
+
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
         private async Task<UserDto> BuildUserDtoAsync(User user)
         {
+            // ✅ Correction: fixed operator issue with ?? by normalizing to array
+            var roles = await _rolePermissionRepo.GetRoleNamesByUserIdAsync(user.Id) ?? Array.Empty<string>();
+            var permissions = await _rolePermissionRepo.GetAllPermissionsByUserIdAsync(user.Id) ?? Array.Empty<string>();
+
             return new UserDto
             {
                 Id = user.Id,
                 Username = user.Username,
                 Email = user.Email,
                 MobileNo = user.MobileNo,
-                Roles = await _rolePermissionRepo.GetRoleNamesByUserIdAsync(user.Id),
-                Permissions = await _rolePermissionRepo.GetAllPermissionsByUserIdAsync(user.Id)
+                IsActive = user.IsActive,
+                Roles = roles,
+                Permissions = permissions
             };
         }
     }

@@ -1,9 +1,11 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using shop_back.src.Shared.Application.DTOs.Auth;
 using shop_back.src.Shared.Application.Interfaces;
 using shop_back.src.Shared.Application.Services;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using System.Text.Json;
 
 namespace shop_back.src.Shared.API.Controllers
 {
@@ -64,11 +66,13 @@ namespace shop_back.src.Shared.API.Controllers
                 return Unauthorized("Missing refresh token");
 
             var result = await _authService.RefreshTokenAsync(refreshToken);
+            // Console.WriteLine("RefreshTokenAsync result: "+JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
             if (result == null)
                 return Unauthorized("Invalid refresh token");
             if (result?.User == null || !result.User.IsActive)
                 return Unauthorized("User is inactive");
 
+            
             // keep expiry consistent
             var expiry = DateTime.UtcNow.AddDays(7);
 

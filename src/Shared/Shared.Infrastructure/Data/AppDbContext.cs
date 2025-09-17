@@ -3,8 +3,10 @@ using shop_back.src.Shared.Domain.Entities;
 
 namespace shop_back.src.Shared.Infrastructure.Data
 {
-    public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+    public class AppDbContext : DbContext
     {
+        public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
         // Shared entities
         public DbSet<User> Users { get; set; } = null!;
         public DbSet<Role> Roles { get; set; } = null!;
@@ -18,21 +20,30 @@ namespace shop_back.src.Shared.Infrastructure.Data
         public DbSet<TranslationKey> TranslationKeys { get; set; } = null!;
         public DbSet<TranslationValue> TranslationValues { get; set; } = null!;
 
-
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
-            // Composite unique constraint: Role + GuardName
+            // ✅ No HasConversion needed for bool <-> PostgreSQL boolean
+
+            // RefreshToken -> User relation
+            modelBuilder.Entity<RefreshToken>()
+                .HasOne(r => r.User)
+                .WithMany(u => u.RefreshTokens)
+                .HasForeignKey(r => r.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Role unique constraint
             modelBuilder.Entity<Role>()
                 .HasIndex(r => new { r.Name, r.GuardName })
                 .IsUnique();
 
+            // Permission unique constraint
             modelBuilder.Entity<Permission>()
                 .HasIndex(p => new { p.Name, p.GuardName })
                 .IsUnique();
 
-            // Relationships
+            // RolePermission relationships
             modelBuilder.Entity<RolePermission>()
                 .HasOne(rp => rp.Role)
                 .WithMany(r => r.RolePermissions)
@@ -43,24 +54,29 @@ namespace shop_back.src.Shared.Infrastructure.Data
                 .WithMany(p => p.RolePermissions)
                 .HasForeignKey(rp => rp.PermissionId);
 
+            // ModelRole relationships
             modelBuilder.Entity<ModelRole>()
                 .HasOne(mr => mr.Role)
                 .WithMany(r => r.ModelRoles)
                 .HasForeignKey(mr => mr.RoleId);
 
+            // ModelPermission relationships
             modelBuilder.Entity<ModelPermission>()
                 .HasOne(mp => mp.Permission)
                 .WithMany(p => p.ModelPermissions)
                 .HasForeignKey(mp => mp.PermissionId);
 
+            // TranslationKey unique index
             modelBuilder.Entity<TranslationKey>()
                 .HasIndex(k => new { k.Module, k.Key })
                 .IsUnique();
 
+            // TranslationValue unique index
             modelBuilder.Entity<TranslationValue>()
                 .HasIndex(v => new { v.KeyId, v.Lang })
                 .IsUnique();
 
+            // TranslationValue -> TranslationKey relationship
             modelBuilder.Entity<TranslationValue>()
                 .HasOne(v => v.Key)
                 .WithMany(k => k.Values)

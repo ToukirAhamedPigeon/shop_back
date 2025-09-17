@@ -36,15 +36,15 @@ namespace shop_back.src.Shared.Infrastructure.Middlewares
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine("CSRF validation failed!");
-                    Console.WriteLine($"Message: {ex.Message}");
-                    Console.WriteLine($"StackTrace: {ex.StackTrace}");
+                    // Console.WriteLine("CSRF validation failed!");
+                    // Console.WriteLine($"Message: {ex.Message}");
+                    // Console.WriteLine($"StackTrace: {ex.StackTrace}");
 
                     foreach (var header in context.Request.Headers)
-                        Console.WriteLine($"Header: {header.Key} = {header.Value}");
+                        // Console.WriteLine($"Header: {header.Key} = {header.Value}");
 
                     foreach (var cookie in context.Request.Cookies)
-                        Console.WriteLine($"Cookie: {cookie.Key} = {cookie.Value}");
+                        // Console.WriteLine($"Cookie: {cookie.Key} = {cookie.Value}");
 
                     context.Response.StatusCode = StatusCodes.Status403Forbidden;
                     await context.Response.WriteAsync("CSRF validation failed.");
