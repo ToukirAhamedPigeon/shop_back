@@ -37,7 +37,7 @@ namespace shop_back.src.Shared.Infrastructure.Middlewares
                 catch (Exception ex)
                 {
                     // Console.WriteLine("CSRF validation failed!");
-                    // Console.WriteLine($"Message: {ex.Message}");
+                    Console.WriteLine($"Message: {ex.Message}");
                     // Console.WriteLine($"StackTrace: {ex.StackTrace}");
 
                     foreach (var header in context.Request.Headers)
