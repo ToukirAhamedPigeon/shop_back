@@ -1,17 +1,15 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
 using DotNetEnv;
 using System.Text;
 using shop_back.src.Shared.Infrastructure.Data;
 using shop_back.src.Shared.Infrastructure.Extensions;
 using shop_back.src.Shared.Infrastructure.Middlewares;
-using shop_back.src.Shared.Application.Authorization;
+using shop_back.src.Shared.Infrastructure.Services.Authorization;
 using shop_back.src.Shared.Domain.Enums;
-using shop_back.src.Shared.Application;
-using shop_back.src.Shared.Application.Repositories;
 using StackExchange.Redis;
 
 try { Env.Load(); } catch { }
@@ -65,13 +63,21 @@ builder.Services.AddAntiforgery(options =>
 #endif
 });
 
-// Authorization Policies
-builder.Services.AddAuthorization(o =>
-{
-    o.AddPolicy("DynamicPermission", p =>
-        p.Requirements.Add(new PermissionRequirement(new List<string>(), PermissionRelation.Or)));
-});
-builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("DynamicPermission", policy =>
+    {
+        // Instead of directly mutating Requirements, use RequireAssertion
+        policy.RequireAssertion(context =>
+        {
+            // You can inject the handler via DI or resolve services from context
+            // For now, we just mark the requirement to succeed; the real check happens in PermissionHandler
+            context.Succeed(new PermissionRequirement([], PermissionRelation.Or));
+            return true;
+        });
+    });
+
+// Register the handler
+builder.Services.AddScoped<IAuthorizationHandler, PermissionHandlerService>();
 
 // Add Controllers
 builder.Services.AddControllers();

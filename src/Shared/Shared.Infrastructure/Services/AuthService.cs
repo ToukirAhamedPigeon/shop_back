@@ -1,16 +1,15 @@
 using BCrypt.Net;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
-using shop_back.src.Shared.Application.Interfaces;
+using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Application.DTOs.Auth;
 using shop_back.src.Shared.Application.Repositories;
 using shop_back.src.Shared.Domain.Entities;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using System.Text.Json;
 
-namespace shop_back.src.Shared.Application.Services
+namespace shop_back.src.Shared.Infrastructure.Services
 {
     public class AuthService : IAuthService
     {

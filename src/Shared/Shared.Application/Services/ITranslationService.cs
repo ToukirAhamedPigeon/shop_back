@@ -1,6 +1,6 @@
 using shop_back.src.Shared.Application.DTOs;
 
-namespace shop_back.src.Shared.Application.Interfaces
+namespace shop_back.src.Shared.Application.Services
 {
     public interface ITranslationService
     {

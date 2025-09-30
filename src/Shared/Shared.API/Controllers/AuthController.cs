@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using shop_back.src.Shared.Application.DTOs.Auth;
-using shop_back.src.Shared.Application.Interfaces;
 using shop_back.src.Shared.Application.Services;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;

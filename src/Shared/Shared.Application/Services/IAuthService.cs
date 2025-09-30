@@ -1,7 +1,7 @@
 using shop_back.src.Shared.Application.DTOs;
 using shop_back.src.Shared.Application.DTOs.Auth;
 
-namespace shop_back.src.Shared.Application.Interfaces
+namespace shop_back.src.Shared.Application.Services
 {
     public interface IAuthService
     {

@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using shop_back.src.Shared.Application.Interfaces;
 using shop_back.src.Shared.Application.Services;
 
 namespace shop_back.src.Shared.API.Controllers

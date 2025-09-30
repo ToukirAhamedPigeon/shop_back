@@ -1,7 +1,7 @@
 using StackExchange.Redis;
 using System.Text.Json;
 using shop_back.src.Shared.Application.DTOs;
-using shop_back.src.Shared.Application.Interfaces;
+using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Domain.Entities;
 using shop_back.src.Shared.Application.Repositories;
 

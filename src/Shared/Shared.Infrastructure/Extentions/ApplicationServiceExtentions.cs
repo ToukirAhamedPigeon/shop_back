@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 
+using shop_back.src.Shared.Infrastructure.Services;
 using shop_back.src.Shared.Application.Services;
-using shop_back.src.Shared.Application.Interfaces;
 
 namespace shop_back.src.Shared.Infrastructure.Extensions
 {
