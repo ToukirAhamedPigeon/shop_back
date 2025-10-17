@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Authorization;
 using DotNetEnv;
 using System.Text;
 using shop_back.src.Shared.Infrastructure.Data;

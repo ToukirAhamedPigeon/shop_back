@@ -147,7 +147,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 Id = user.Id,
                 Username = user.Username,
                 Email = user.Email,
-                MobileNo = user.MobileNo,
+                MobileNo = user.MobileNo ?? string.Empty,
                 IsActive = user.IsActive,
                 Roles = roles,
                 Permissions = permissions

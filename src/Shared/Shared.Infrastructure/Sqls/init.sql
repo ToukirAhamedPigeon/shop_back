@@ -220,6 +220,22 @@ CREATE TABLE public.translation_values (
   created_at timestamptz DEFAULT now(),
   UNIQUE (key_id, lang)
 );
+// For Laravel Sanctum
+CREATE TABLE personal_access_tokens (
+    id bigserial PRIMARY KEY,
+    tokenable_type varchar(255) NOT NULL,
+    tokenable_id varchar(255) NOT NULL,
+    name varchar(255) NOT NULL,
+    token varchar(64) NOT NULL,
+    abilities text,
+    last_used_at timestamp(0) without time zone,
+    created_at timestamp(0) without time zone NOT NULL,
+    updated_at timestamp(0) without time zone NOT NULL
+);
+
+-- Add an index for fast lookup by token
+CREATE UNIQUE INDEX personal_access_tokens_token_index ON personal_access_tokens(token);
+
 
 -- index for quick lookups by lang
 CREATE INDEX idx_translation_values_lang ON public.translation_values (lang);

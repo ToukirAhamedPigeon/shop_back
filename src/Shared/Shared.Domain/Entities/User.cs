@@ -28,9 +28,8 @@ namespace shop_back.src.Shared.Domain.Entities
         [Column("password")]
         public string Password { get; set; } = string.Empty;
 
-        [Required]
         [Column("mobile_no")]
-        public string MobileNo { get; set; } = string.Empty;
+        public string? MobileNo { get; set; }   // 🔹 made nullable
 
         [Column("is_active")]
         public bool IsActive { get; set; } = true;
@@ -43,6 +42,12 @@ namespace shop_back.src.Shared.Domain.Entities
 
         [Column("updated_at")]
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        [Column("remember_token")]
+        public string? RememberToken { get; set; }   // 🔹 new column
+
+        [Column("email_verified_at")]
+        public DateTime? EmailVerifiedAt { get; set; }  // 🔹 new column (nullable)
 
         // Navigation property for related refresh tokens
         public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
