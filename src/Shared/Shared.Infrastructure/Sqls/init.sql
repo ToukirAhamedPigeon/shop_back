@@ -239,3 +239,42 @@ CREATE UNIQUE INDEX personal_access_tokens_token_index ON personal_access_tokens
 
 -- index for quick lookups by lang
 CREATE INDEX idx_translation_values_lang ON public.translation_values (lang);
+
+
+create table public.otp (
+  id serial primary key,
+  email character varying not null,
+  code_hash character varying not null,
+  purpose character varying not null,
+  expires_at timestamp without time zone not null,
+  used boolean not null default false,
+  attempts integer not null default 0,
+  user_id uuid not null,
+  created_at timestamp without time zone not null default now(),
+  updated_at timestamp without time zone not null default now(),
+
+  constraint otp_user_id_fkey foreign key (user_id)
+    references public.users (id)
+    on update cascade
+    on delete restrict
+);
+
+-- trigger to auto-update `updated_at`
+create trigger set_otp_updated_at
+before update on public.otp
+for each row
+execute function update_timestamp();
+
+create table public.password_reset (
+  id serial primary key,
+  token character varying not null unique,
+  user_id uuid not null,
+  expires_at timestamp without time zone not null,
+  used boolean not null default false,
+  created_at timestamp without time zone not null default now(),
+
+  constraint password_reset_user_id_fkey foreign key (user_id)
+    references public.users (id)
+    on update cascade
+    on delete cascade
+);

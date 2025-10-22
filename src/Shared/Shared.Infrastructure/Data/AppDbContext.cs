@@ -12,6 +12,8 @@ namespace shop_back.src.Shared.Infrastructure.Data
         public DbSet<User> Users { get; set; } = null!;
         public DbSet<Role> Roles { get; set; } = null!;
         public DbSet<Permission> Permissions { get; set; } = null!;
+        public DbSet<Otp> Otps { get; set; } = null!;
+        public DbSet<PasswordReset> PasswordResets { get; set; } = null!;
         public DbSet<RolePermission> RolePermissions { get; set; } = null!;
         public DbSet<ModelRole> ModelRoles { get; set; } = null!;
         public DbSet<ModelPermission> ModelPermissions { get; set; } = null!;
@@ -105,6 +107,20 @@ namespace shop_back.src.Shared.Infrastructure.Data
                 .HasOne(v => v.Key)
                 .WithMany(k => k.Values)
                 .HasForeignKey(v => v.KeyId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Otp -> User relationship
+            modelBuilder.Entity<Otp>()
+                .HasOne(o => o.User)
+                .WithMany() // No collection navigation in User (only single side)
+                .HasForeignKey(o => o.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // PasswordReset -> User relationship
+            modelBuilder.Entity<PasswordReset>()
+                .HasOne(pr => pr.User)
+                .WithMany() // No collection navigation in User
+                .HasForeignKey(pr => pr.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         }
     }
