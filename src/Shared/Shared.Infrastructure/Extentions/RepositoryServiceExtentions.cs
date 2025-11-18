@@ -16,6 +16,10 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
             services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
             services.AddScoped<IRolePermissionRepository, RolePermissionRepository>();
             services.AddScoped<ITranslationRepository, TranslationRepository>();
+            services.AddScoped<IMailRepository, MailRepository>();
+            services.AddScoped<IPasswordResetRepository, PasswordResetRepository>();
+            services.AddScoped<IOtpRepository, OtpRepository>();
+
 
             return services;
         }

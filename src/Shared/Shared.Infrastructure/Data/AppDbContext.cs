@@ -22,6 +22,7 @@ namespace shop_back.src.Shared.Infrastructure.Data
         public DbSet<RefreshToken> RefreshTokens { get; set; } = null!;
         public DbSet<TranslationKey> TranslationKeys { get; set; } = null!;
         public DbSet<TranslationValue> TranslationValues { get; set; } = null!;
+        public DbSet<Mail> Mails { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -122,6 +123,13 @@ namespace shop_back.src.Shared.Infrastructure.Data
                 .WithMany() // No collection navigation in User
                 .HasForeignKey(pr => pr.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
-        }
+
+                 // Mail -> User relationship
+                modelBuilder.Entity<Mail>()
+                    .HasOne(m => m.CreatedByUser)
+                    .WithMany() // Optional: No collection in User
+                    .HasForeignKey(m => m.CreatedBy)
+                    .OnDelete(DeleteBehavior.SetNull); // Nullable FK
+                    }
     }
 }

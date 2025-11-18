@@ -10,31 +10,37 @@ using shop_back.src.Shared.Infrastructure.Middlewares;
 using shop_back.src.Shared.Infrastructure.Services.Authorization;
 using shop_back.src.Shared.Domain.Enums;
 using StackExchange.Redis;
+using System.Security.Claims;
 
 try { Env.Load(); } catch { }
 var builder = WebApplication.CreateBuilder(args);
 
 // Load .env
-try { DotNetEnv.Env.Load(".env.local"); } catch { }
+var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"));
+Console.WriteLine("ENV LOADED FROM: " + envPath);
+try { DotNetEnv.Env.Load(envPath); } catch { }
+
 
 // Database
-var connStr = builder.Configuration.GetConnectionString("DefaultConnection") 
-              ?? DotNetEnv.Env.GetString("DefaultConnection");
+var connStr = DotNetEnv.Env.GetString("DefaultConnection");
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connStr));
 
+Console.WriteLine($"DefaultConnection: {DotNetEnv.Env.GetString("DefaultConnection")}");
+Console.WriteLine($"RedisConnectionString: {DotNetEnv.Env.GetString("RedisConnectionString")}");
+
 // Redis
-var redisConn = builder.Configuration.GetValue<string>("Redis:ConnectionString") 
-                ?? DotNetEnv.Env.GetString("Redis:ConnectionString");
+var redisConn = DotNetEnv.Env.GetString("RedisConnectionString");
 var multiplexer = ConnectionMultiplexer.Connect(redisConn);
 builder.Services.AddSingleton<IConnectionMultiplexer>(multiplexer);
 
 // Add Shared Repositories & Services
+builder.Services.AddSettings(builder.Configuration);
 builder.Services.AddRepositories();
 builder.Services.AddServices();
 
 // Auth (JWT + CSRF)
-var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!);
+var key = Encoding.UTF8.GetBytes(DotNetEnv.Env.GetString("JwtKey")!);
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(o =>
     {
@@ -43,8 +49,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidIssuer = DotNetEnv.Env.GetString("JwtIssuer")!,
+            ValidAudience = DotNetEnv.Env.GetString("JwtAudience")!,
             IssuerSigningKey = new SymmetricSecurityKey(key)
         };
     });
