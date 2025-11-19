@@ -42,8 +42,8 @@ ECommerceExt.ApplicationServiceExtensions.AddServices(builder.Services);
 // --------------------
 // 4. Authentication & Authorization
 // --------------------
-var jwtKey = builder.Configuration["Jwt:Key"]
-             ?? throw new InvalidOperationException("Jwt:Key not set");
+var jwtKey = builder.Configuration["JwtKey"]
+             ?? throw new InvalidOperationException("JwtKey not set");
 
 var keyBytes = Encoding.UTF8.GetBytes(jwtKey);
 
@@ -55,8 +55,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidIssuer = builder.Configuration["JwtIssuer"],
+            ValidAudience = builder.Configuration["JwtAudience"],
             IssuerSigningKey = new SymmetricSecurityKey(keyBytes)
         };
     });

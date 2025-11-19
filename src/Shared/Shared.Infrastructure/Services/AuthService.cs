@@ -90,21 +90,39 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         public async Task LogoutAsync(string token)
         {
-            var refreshToken = await _refreshTokenRepo.GetByTokenAsync(token);
-            if (refreshToken != null)
+            try{
+                var refreshToken = await _refreshTokenRepo.GetByTokenAsync(token);
+                if (refreshToken != null)
+                {
+                    await _refreshTokenRepo.RevokeAsync(refreshToken);
+                }
+            }
+            catch (Exception ex)
             {
-                await _refreshTokenRepo.RevokeAsync(refreshToken);
+                Console.WriteLine("LogoutAsync Error: " + ex.Message);
             }
         }
 
         public async Task LogoutAllDevicesAsync(Guid userId)
         {
-            await _refreshTokenRepo.RevokeAllAsync(userId);
+            try{
+                await _refreshTokenRepo.RevokeAllAsync(userId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("LogoutAllDevicesAsync Error: " + ex.Message);
+            }
         }
 
         public async Task LogoutOtherDevicesAsync(string exceptRefreshToken, Guid userId)
         {
-            await _refreshTokenRepo.RevokeOtherAsync(exceptRefreshToken, userId);
+            try{
+                await _refreshTokenRepo.RevokeOtherAsync(exceptRefreshToken, userId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("LogoutOtherDevicesAsync Error: " + ex.Message);
+            }
         }
 
         private string GenerateJwtToken(User user)
@@ -117,17 +135,20 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
                 new Claim("mobile_no", user.MobileNo ?? string.Empty)
             };
-
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
+            var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", ".env"));
+            Console.WriteLine("ENV LOADED FROM: " + envPath);
+            try { DotNetEnv.Env.Load(envPath); } catch { }
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(DotNetEnv.Env.GetString("JwtKey")!));
+            Console.WriteLine("JWT KEY: " + DotNetEnv.Env.GetString("JwtKey"));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             // ✅ Correction: expiry configurable, defaults to 10 mins
-            var tokenExpiryMinutes = int.TryParse(_config["Jwt:ExpiryMinutes"], out var minutes) ? minutes : 10;
+            var tokenExpiryMinutes = int.TryParse(DotNetEnv.Env.GetString("JwtExpiryMinutes"), out var minutes) ? minutes : 10;
             var expires = DateTime.UtcNow.AddMinutes(tokenExpiryMinutes);
 
             var token = new JwtSecurityToken(
-                issuer: _config["Jwt:Issuer"],
-                audience: _config["Jwt:Audience"],
+                issuer: DotNetEnv.Env.GetString("JwtIssuer"),
+                audience: DotNetEnv.Env.GetString("JwtAudience"),
                 claims: claims,
                 expires: expires,
                 signingCredentials: creds

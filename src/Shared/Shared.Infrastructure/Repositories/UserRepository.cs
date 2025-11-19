@@ -26,5 +26,37 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                      u.Email == identifier ||
                      u.MobileNo == identifier));
         }
+
+        public async Task<User?> GetByEmailAsync(string email)
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(u =>
+                    !u.IsDeleted && 
+                    u.Email == email);
+        }
+
+        public async Task<User?> GetByMobileNoAsync(string mobileNo)
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(u =>
+                    !u.IsDeleted && 
+                    u.MobileNo == mobileNo);
+        }
+
+        public async Task AddAsync(User user)
+        {
+            await _context.Users.AddAsync(user);
+        }
+
+        public Task UpdateAsync(User user)
+        {
+            _context.Users.Update(user);
+            return Task.CompletedTask;
+        }
+
+        public async Task SaveChangesAsync()
+        {
+            await _context.SaveChangesAsync();
+        }
     }
 }

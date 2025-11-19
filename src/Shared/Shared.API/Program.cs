@@ -38,7 +38,9 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(multiplexer);
 builder.Services.AddSettings(builder.Configuration);
 builder.Services.AddRepositories();
 builder.Services.AddServices();
-
+Console.WriteLine($"JwtKey: {DotNetEnv.Env.GetString("JwtKey")}");
+Console.WriteLine($"JwtIssuer: {DotNetEnv.Env.GetString("JwtIssuer")}");
+Console.WriteLine($"JwtAudience: {DotNetEnv.Env.GetString("JwtAudience")}");
 // Auth (JWT + CSRF)
 var key = Encoding.UTF8.GetBytes(DotNetEnv.Env.GetString("JwtKey")!);
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
