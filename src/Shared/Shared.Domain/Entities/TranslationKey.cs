@@ -9,6 +9,7 @@ namespace shop_back.src.Shared.Domain.Entities
     public class TranslationKey
     {
         [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         [Column("id")]
         public long Id { get; set; }
 

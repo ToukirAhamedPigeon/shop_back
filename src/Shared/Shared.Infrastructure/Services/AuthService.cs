@@ -136,10 +136,10 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 new Claim("mobile_no", user.MobileNo ?? string.Empty)
             };
             var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", ".env"));
-            Console.WriteLine("ENV LOADED FROM: " + envPath);
+            // Console.WriteLine("ENV LOADED FROM: " + envPath);
             try { DotNetEnv.Env.Load(envPath); } catch { }
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(DotNetEnv.Env.GetString("JwtKey")!));
-            Console.WriteLine("JWT KEY: " + DotNetEnv.Env.GetString("JwtKey"));
+            // Console.WriteLine("JWT KEY: " + DotNetEnv.Env.GetString("JwtKey"));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             // ✅ Correction: expiry configurable, defaults to 10 mins

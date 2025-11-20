@@ -4,6 +4,8 @@ using shop_back.src.Shared.Application.Repositories;
 using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Application.DTOs.Auth;
 using shop_back.src.Shared.Domain.Entities;
+using DotNetEnv;
+using shop_back.src.Shared.Infrastructure.Helpers;
 
 public class PasswordResetService : IPasswordResetService
 {
@@ -19,42 +21,65 @@ public class PasswordResetService : IPasswordResetService
     }
 
     public async Task RequestPasswordResetAsync(string email)
-    {
-        var user = await _userRepo.GetByEmailAsync(email);
-        if (user == null) throw new Exception("Email not registered.");
-
-        // Generate token
-        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)); // 64 chars
-        var reset = new PasswordReset
         {
-            UserId = user.Id,
-            Token = token,
-            ExpiresAt = DateTime.UtcNow.AddHours(1)
-        };
+            try
+            {
+                var user = await _userRepo.GetByEmailAsync(email);
+                if (user == null) throw new Exception("Email not registered.");
 
-        await _resetRepo.AddAsync(reset);
-        await _resetRepo.SaveChangesAsync();
+                // Generate token
+                var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 
-        // Mail template
-        var resetLink = $"https://yourfrontend.com/reset-password/{token}";
-        var body = $@"
-            <h2>Password Reset Request</h2>
-            <p>Hello {user.Name},</p>
-            <p>Click the link below to reset your password. This link expires in 1 hour.</p>
-            <a href='{resetLink}' target='_blank'>{resetLink}</a>
-            <p>If you did not request this, ignore this email.</p>";
+                var reset = new PasswordReset
+                {
+                    UserId = user.Id,
+                    Token = token,
+                    ExpiresAt = DateTime.UtcNow.AddHours(1),
+                    Used = false
+                };
 
-        await _mailService.SendEmailAsync(new Mail
-        {
-            FromMail = "noreply@shop.com",
-            ToMail = user.Email,
-            Subject = "Reset your password",
-            Body = body,
-            ModuleName = "Auth",
-            Purpose = "PasswordReset",
-            CreatedBy = user.Id
-        });
-    }
+                await _resetRepo.AddAsync(reset);
+                await _resetRepo.SaveChangesAsync();
+
+                // Load environment variables
+                var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", ".env"));
+                try { Env.Load(envPath); } catch { }
+
+                var frontendAdminUrl = Env.GetString("FrontendAdminUrl")!;
+                var resetLink = $"{frontendAdminUrl}/reset-password/{token}";
+
+                var body = $@"
+                    <h2>Password Reset Request</h2>
+                    <p>Hello {user.Name},</p>
+                    <p>Click the link below to reset your password. This link expires in 1 hour.</p>
+                    <a href='{resetLink}' target='_blank'>{resetLink}</a>
+                    <p>If you did not request this, ignore this email.</p>";
+
+                // --- Test attachments ---
+                var attachments = new List<string>
+                {
+                    FilePathHelper.GetApiUploadsPath("test", "sample1.pdf"),
+                    FilePathHelper.GetApiUploadsPath("test", "sample2.txt")
+                };
+
+                await _mailService.SendEmailAsync(new Mail
+                {
+                    FromMail = "noreply@shop.com",
+                    ToMail = user.Email,
+                    Subject = "Reset your password",
+                    Body = body,
+                    ModuleName = "Auth",
+                    Purpose = "PasswordReset",
+                    CreatedBy = user.Id,
+                    Attachments = attachments
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in RequestPasswordResetAsync: {ex.Message}");
+                throw new Exception("Error sending password reset email.", ex);
+            }
+        }
 
     public async Task<bool> ValidateTokenAsync(string token)
     {

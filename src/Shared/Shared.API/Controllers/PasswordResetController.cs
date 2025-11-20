@@ -1,51 +1,90 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Application.DTOs.Auth;
 
-[ApiController]
-[Route("api/[controller]")]
-public class PasswordResetController : ControllerBase
+namespace shop_back.src.Shared.API.Controllers
 {
-    private readonly IPasswordResetService _resetService;
-
-    public PasswordResetController(IPasswordResetService resetService)
+    [ApiController]
+    [Route("api/auth/password-reset")]
+    public class PasswordResetController : ControllerBase
     {
-        _resetService = resetService;
-    }
+        private readonly IPasswordResetService _resetService;
 
-    [HttpPost("request")]
-    public async Task<IActionResult> Request([FromBody] string email)
-    {
-        try
+        public PasswordResetController(IPasswordResetService resetService)
         {
-            await _resetService.RequestPasswordResetAsync(email);
-            return Ok(new { message = "Password reset email sent." });
+            _resetService = resetService;
         }
-        catch (Exception ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-    }
 
-    [HttpGet("validate/{token}")]
-    public async Task<IActionResult> ValidateToken(string token)
-    {
-        var valid = await _resetService.ValidateTokenAsync(token);
-        if (!valid) return BadRequest(new { message = "Invalid or expired link." });
-        return Ok(new { valid = true });
-    }
+        // 1️⃣ Request password reset email
+        [HttpPost("request")]
+        [AllowAnonymous]
+        public async Task<IActionResult> RequestPasswordReset([FromBody] CreatePasswordResetRequestDto request)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
 
-    [HttpPost("reset")]
-    public async Task<IActionResult> Reset([FromBody] ResetPasswordRequestDto request)
-    {
-        try
-        {
-            await _resetService.ResetPasswordAsync(request);
-            return Ok(new { message = "Password successfully reset." });
+            try
+            {
+                await _resetService.RequestPasswordResetAsync(request.Email);
+                return Ok(new CreatePasswordResetResponseDto { Message = "Password reset email sent." });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in RequestPasswordResetAsync: {ex.Message}");
+                return BadRequest(new CreatePasswordResetResponseDto { Message = ex.Message });
+            }
         }
-        catch (Exception ex)
+
+        // 2️⃣ Validate reset token
+        [HttpGet("validate/{token}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ValidateToken(string token)
         {
-            return BadRequest(new { message = ex.Message });
+            try
+            {
+                var valid = await _resetService.ValidateTokenAsync(token);
+                if (!valid)
+                    return BadRequest(new ValidateResetTokenResponseDto
+                    {
+                        IsValid = false,
+                        Reason = "Invalid or expired token"
+                    });
+
+                return Ok(new ValidateResetTokenResponseDto
+                {
+                    IsValid = true
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in ValidateTokenAsync: {ex.Message}");
+                return BadRequest(new ValidateResetTokenResponseDto
+                {
+                    IsValid = false,
+                    Reason = ex.Message
+                });
+            }
+        }
+
+        // 3️⃣ Reset password
+        [HttpPost("reset")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto request)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            try
+            {
+                await _resetService.ResetPasswordAsync(request);
+                return Ok(new CreatePasswordResetResponseDto { Message = "Password successfully reset." });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in ResetPasswordAsync: {ex.Message}");
+                return BadRequest(new CreatePasswordResetResponseDto { Message = ex.Message });
+            }
         }
     }
 }

@@ -19,8 +19,6 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
             services.AddScoped<IMailRepository, MailRepository>();
             services.AddScoped<IPasswordResetRepository, PasswordResetRepository>();
             services.AddScoped<IOtpRepository, OtpRepository>();
-
-
             return services;
         }
     }

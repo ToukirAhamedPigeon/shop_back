@@ -8,8 +8,9 @@ namespace shop_back.src.Shared.Domain.Entities
     public class PasswordReset
     {
         [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         [Column("id")]
-        public int Id { get; set; }
+        public long Id { get; set; }
 
         [Required]
         [Column("token")]

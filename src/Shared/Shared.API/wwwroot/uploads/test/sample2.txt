@@ -1,0 +1,733 @@
+Array
+(
+    [0] => Array
+        (
+            [id] => 3
+            [voucher_no] => JV/23/08/1
+            [debit] => 7000000
+            [credit] => 0
+            [balance] => 7000000
+            [total_balance] => 7000000
+        )
+
+    [1] => Array
+        (
+            [id] => 6
+            [voucher_no] => JV/23/08/2
+            [debit] => 0
+            [credit] => 60
+            [balance] => -60
+            [total_balance] => 6999940
+        )
+
+    [2] => Array
+        (
+            [id] => 8
+            [voucher_no] => JV/23/08/3
+            [debit] => 0
+            [credit] => 6000000
+            [balance] => -6000000
+            [total_balance] => 999940
+        )
+
+    [3] => Array
+        (
+            [id] => 16
+            [voucher_no] => JV/23/08/5
+            [debit] => 0
+            [credit] => 14497
+            [balance] => -14497
+            [total_balance] => 985443
+        )
+
+    [4] => Array
+        (
+            [id] => 26
+            [voucher_no] => JV/23/08/7
+            [debit] => 17500
+            [credit] => 0
+            [balance] => 17500
+            [total_balance] => 1002943
+        )
+
+    [5] => Array
+        (
+            [id] => 32
+            [voucher_no] => JV/23/08/6
+            [debit] => 0
+            [credit] => 6030
+            [balance] => -6030
+            [total_balance] => 996913
+        )
+
+    [6] => Array
+        (
+            [id] => 34
+            [voucher_no] => JV/23/08/8
+            [debit] => 0
+            [credit] => 60
+            [balance] => -60
+            [total_balance] => 996853
+        )
+
+    [7] => Array
+        (
+            [id] => 36
+            [voucher_no] => JV/23/08/9
+            [debit] => 0
+            [credit] => 60
+            [balance] => -60
+            [total_balance] => 996793
+        )
+
+    [8] => Array
+        (
+            [id] => 42
+            [voucher_no] => JV/23/08/11
+            [debit] => 49000
+            [credit] => 0
+            [balance] => 49000
+            [total_balance] => 1045793
+        )
+
+    [9] => Array
+        (
+            [id] => 43
+            [voucher_no] => JV/23/08/10
+            [debit] => 49000
+            [credit] => 0
+            [balance] => 49000
+            [total_balance] => 1094793
+        )
+
+    [10] => Array
+        (
+            [id] => 45
+            [voucher_no] => JV/23/08/12
+            [debit] => 49000
+            [credit] => 0
+            [balance] => 49000
+            [total_balance] => 1143793
+        )
+
+    [11] => Array
+        (
+            [id] => 50
+            [voucher_no] => JV/23/08/13
+            [debit] => 0
+            [credit] => 2500000
+            [balance] => -2500000
+            [total_balance] => -1356207
+        )
+
+    [12] => Array
+        (
+            [id] => 60
+            [voucher_no] => JV/23/09/14
+            [debit] => 0
+            [credit] => 28500
+            [balance] => -28500
+            [total_balance] => -1384707
+        )
+
+    [13] => Array
+        (
+            [id] => 64
+            [voucher_no] => JV/23/09/15
+            [debit] => 0
+            [credit] => 129957
+            [balance] => -129957
+            [total_balance] => -1514664
+        )
+
+    [14] => Array
+        (
+            [id] => 65
+            [voucher_no] => JV/23/09/16
+            [debit] => 1211320.25
+            [credit] => 0
+            [balance] => 1211320
+            [total_balance] => -303344
+        )
+
+    [15] => Array
+        (
+            [id] => 67
+            [voucher_no] => JV/23/09/17
+            [debit] => 8380622.25
+            [credit] => 0
+            [balance] => 8380622
+            [total_balance] => 8077278
+        )
+
+    [16] => Array
+        (
+            [id] => 69
+            [voucher_no] => JV/23/09/18
+            [debit] => 1504219.5
+            [credit] => 0
+            [balance] => 1504220
+            [total_balance] => 9581498
+        )
+
+    [17] => Array
+        (
+            [id] => 71
+            [voucher_no] => JV/23/09/19
+            [debit] => 1606520
+            [credit] => 0
+            [balance] => 1606520
+            [total_balance] => 11188018
+        )
+
+    [18] => Array
+        (
+            [id] => 73
+            [voucher_no] => JV/23/09/20
+            [debit] => 1505623
+            [credit] => 0
+            [balance] => 1505623
+            [total_balance] => 12693641
+        )
+
+    [19] => Array
+        (
+            [id] => 77
+            [voucher_no] => JV/23/09/22
+            [debit] => 1985115
+            [credit] => 0
+            [balance] => 1985115
+            [total_balance] => 14678756
+        )
+
+    [20] => Array
+        (
+            [id] => 79
+            [voucher_no] => JV/23/09/21
+            [debit] => 5000000
+            [credit] => 0
+            [balance] => 5000000
+            [total_balance] => 19678756
+        )
+
+    [21] => Array
+        (
+            [id] => 81
+            [voucher_no] => JV/23/09/23
+            [debit] => 356725
+            [credit] => 0
+            [balance] => 356725
+            [total_balance] => 20035481
+        )
+
+    [22] => Array
+        (
+            [id] => 83
+            [voucher_no] => JV/23/09/24
+            [debit] => 356502
+            [credit] => 0
+            [balance] => 356502
+            [total_balance] => 20391983
+        )
+
+    [23] => Array
+        (
+            [id] => 85
+            [voucher_no] => JV/23/09/25
+            [debit] => 3469200
+            [credit] => 0
+            [balance] => 3469200
+            [total_balance] => 23861183
+        )
+
+    [24] => Array
+        (
+            [id] => 87
+            [voucher_no] => JV/23/09/26
+            [debit] => 2800000
+            [credit] => 0
+            [balance] => 2800000
+            [total_balance] => 26661183
+        )
+
+    [25] => Array
+        (
+            [id] => 135
+            [voucher_no] => JV/23/09/33
+            [debit] => 52735.27
+            [credit] => 0
+            [balance] => 52735
+            [total_balance] => 26713918
+        )
+
+    [26] => Array
+        (
+            [id] => 138
+            [voucher_no] => JV/23/11/34
+            [debit] => 0
+            [credit] => 2500000
+            [balance] => -2500000
+            [total_balance] => 24213918
+        )
+
+    [27] => Array
+        (
+            [id] => 152
+            [voucher_no] => JV/23/11/36
+            [debit] => 0
+            [credit] => 32000
+            [balance] => -32000
+            [total_balance] => 24181918
+        )
+
+    [28] => Array
+        (
+            [id] => 154
+            [voucher_no] => JV/23/11/37
+            [debit] => 0
+            [credit] => 41910
+            [balance] => -41910
+            [total_balance] => 24140008
+        )
+
+    [29] => Array
+        (
+            [id] => 160
+            [voucher_no] => JV/23/11/38
+            [debit] => 0
+            [credit] => 50000
+            [balance] => -50000
+            [total_balance] => 24090008
+        )
+
+    [30] => Array
+        (
+            [id] => 162
+            [voucher_no] => JV/23/11/39
+            [debit] => 0
+            [credit] => 129990
+            [balance] => -129990
+            [total_balance] => 23960018
+        )
+
+    [31] => Array
+        (
+            [id] => 164
+            [voucher_no] => JV/23/11/40
+            [debit] => 0
+            [credit] => 2500000
+            [balance] => -2500000
+            [total_balance] => 21460018
+        )
+
+    [32] => Array
+        (
+            [id] => 168
+            [voucher_no] => JV/23/09/32
+            [debit] => 0
+            [credit] => 25480
+            [balance] => -25480
+            [total_balance] => 21434538
+        )
+
+    [33] => Array
+        (
+            [id] => 172
+            [voucher_no] => JV/23/11/41
+            [debit] => 0
+            [credit] => 25480
+            [balance] => -25480
+            [total_balance] => 21409058
+        )
+
+    [34] => Array
+        (
+            [id] => 173
+            [voucher_no] => JV/23/11/42
+            [debit] => 70000
+            [credit] => 0
+            [balance] => 70000
+            [total_balance] => 21479058
+        )
+
+    [35] => Array
+        (
+            [id] => 192
+            [voucher_no] => JV/23/11/44
+            [debit] => 1587615
+            [credit] => 0
+            [balance] => 1587615
+            [total_balance] => 23066673
+        )
+
+    [36] => Array
+        (
+            [id] => 195
+            [voucher_no] => JV/23/11/45
+            [debit] => 0
+            [credit] => 1436000
+            [balance] => -1436000
+            [total_balance] => 21630673
+        )
+
+    [37] => Array
+        (
+            [id] => 197
+            [voucher_no] => JV/23/11/46
+            [debit] => 0
+            [credit] => 1446000
+            [balance] => -1446000
+            [total_balance] => 20184673
+        )
+
+    [38] => Array
+        (
+            [id] => 198
+            [voucher_no] => JV/23/11/47
+            [debit] => 52000
+            [credit] => 0
+            [balance] => 52000
+            [total_balance] => 20236673
+        )
+
+    [39] => Array
+        (
+            [id] => 205
+            [voucher_no] => JV/23/11/48
+            [debit] => 0
+            [credit] => 25406
+            [balance] => -25406
+            [total_balance] => 20211267
+        )
+
+    [40] => Array
+        (
+            [id] => 207
+            [voucher_no] => JV/23/11/49
+            [debit] => 0
+            [credit] => 8190
+            [balance] => -8190
+            [total_balance] => 20203077
+        )
+
+    [41] => Array
+        (
+            [id] => 209
+            [voucher_no] => JV/23/11/50
+            [debit] => 0
+            [credit] => 25258
+            [balance] => -25258
+            [total_balance] => 20177819
+        )
+
+    [42] => Array
+        (
+            [id] => 228
+            [voucher_no] => JV/23/11/35
+            [debit] => 0
+            [credit] => 28500
+            [balance] => -28500
+            [total_balance] => 20149319
+        )
+
+    [43] => Array
+        (
+            [id] => 235
+            [voucher_no] => JV/23/11/51
+            [debit] => 0
+            [credit] => 10672
+            [balance] => -10672
+            [total_balance] => 20138647
+        )
+
+    [44] => Array
+        (
+            [id] => 237
+            [voucher_no] => JV/23/11/52
+            [debit] => 0
+            [credit] => 21102
+            [balance] => -21102
+            [total_balance] => 20117545
+        )
+
+    [45] => Array
+        (
+            [id] => 238
+            [voucher_no] => JV/23/11/53
+            [debit] => 800000
+            [credit] => 0
+            [balance] => 800000
+            [total_balance] => 20917545
+        )
+
+    [46] => Array
+        (
+            [id] => 243
+            [voucher_no] => JV/23/11/54
+            [debit] => 0
+            [credit] => 1124000
+            [balance] => -1124000
+            [total_balance] => 19793545
+        )
+
+    [47] => Array
+        (
+            [id] => 253
+            [voucher_no] => JV/23/11/56
+            [debit] => 0
+            [credit] => 20000
+            [balance] => -20000
+            [total_balance] => 19773545
+        )
+
+    [48] => Array
+        (
+            [id] => 259
+            [voucher_no] => JV/23/11/57
+            [debit] => 0
+            [credit] => 2832
+            [balance] => -2832
+            [total_balance] => 19770713
+        )
+
+    [49] => Array
+        (
+            [id] => 260
+            [voucher_no] => JV/23/11/58
+            [debit] => 5000000
+            [credit] => 0
+            [balance] => 5000000
+            [total_balance] => 24770713
+        )
+
+    [50] => Array
+        (
+            [id] => 265
+            [voucher_no] => JV/23/09/27
+            [debit] => 0
+            [credit] => 833290
+            [balance] => -833290
+            [total_balance] => 23937423
+        )
+
+    [51] => Array
+        (
+            [id] => 274
+            [voucher_no] => JV/23/12/59
+            [debit] => 0
+            [credit] => 16788
+            [balance] => -16788
+            [total_balance] => 23920635
+        )
+
+    [52] => Array
+        (
+            [id] => 276
+            [voucher_no] => JV/23/12/60
+            [debit] => 0
+            [credit] => 149108
+            [balance] => -149108
+            [total_balance] => 23771527
+        )
+
+    [53] => Array
+        (
+            [id] => 279
+            [voucher_no] => JV/23/12/61
+            [debit] => 0
+            [credit] => 127800
+            [balance] => -127800
+            [total_balance] => 23643727
+        )
+
+    [54] => Array
+        (
+            [id] => 289
+            [voucher_no] => JV/23/12/62
+            [debit] => 0
+            [credit] => 28500
+            [balance] => -28500
+            [total_balance] => 23615227
+        )
+
+    [55] => Array
+        (
+            [id] => 294
+            [voucher_no] => JV/23/12/63
+            [debit] => 0
+            [credit] => 1445000
+            [balance] => -1445000
+            [total_balance] => 22170227
+        )
+
+    [56] => Array
+        (
+            [id] => 299
+            [voucher_no] => JV/23/12/64
+            [debit] => 0
+            [credit] => 25406
+            [balance] => -25406
+            [total_balance] => 22144821
+        )
+
+    [57] => Array
+        (
+            [id] => 307
+            [voucher_no] => JV/23/08/4
+            [debit] => 0
+            [credit] => 23400
+            [balance] => -23400
+            [total_balance] => 22121421
+        )
+
+    [58] => Array
+        (
+            [id] => 311
+            [voucher_no] => JV/23/12/65
+            [debit] => 0
+            [credit] => 888412
+            [balance] => -888412
+            [total_balance] => 21233009
+        )
+
+    [59] => Array
+        (
+            [id] => 318
+            [voucher_no] => JV/23/12/67
+            [debit] => 0
+            [credit] => 1500000
+            [balance] => -1500000
+            [total_balance] => 19733009
+        )
+
+    [60] => Array
+        (
+            [id] => 324
+            [voucher_no] => JV/23/12/69
+            [debit] => 0
+            [credit] => 153900
+            [balance] => -153900
+            [total_balance] => 19579109
+        )
+
+    [61] => Array
+        (
+            [id] => 326
+            [voucher_no] => JV/23/12/70
+            [debit] => 0
+            [credit] => 2500000
+            [balance] => -2500000
+            [total_balance] => 17079109
+        )
+
+    [62] => Array
+        (
+            [id] => 327
+            [voucher_no] => JV/23/12/71
+            [debit] => 197000
+            [credit] => 0
+            [balance] => 197000
+            [total_balance] => 17276109
+        )
+
+    [63] => Array
+        (
+            [id] => 348
+            [voucher_no] => JV/23/12/72
+            [debit] => 0
+            [credit] => 25480
+            [balance] => -25480
+            [total_balance] => 17250629
+        )
+
+    [64] => Array
+        (
+            [id] => 350
+            [voucher_no] => JV/23/12/73
+            [debit] => 0
+            [credit] => 2500000
+            [balance] => -2500000
+            [total_balance] => 14750629
+        )
+
+    [65] => Array
+        (
+            [id] => 356
+            [voucher_no] => JV/23/12/74
+            [debit] => 98806
+            [credit] => 0
+            [balance] => 98806
+            [total_balance] => 14849435
+        )
+
+    [66] => Array
+        (
+            [id] => 362
+            [voucher_no] => JV/23/12/75
+            [debit] => 0
+            [credit] => 149127
+            [balance] => -149127
+            [total_balance] => 14700308
+        )
+
+    [67] => Array
+        (
+            [id] => 365
+            [voucher_no] => JV/23/12/76
+            [debit] => 0
+            [credit] => 48600
+            [balance] => -48600
+            [total_balance] => 14651708
+        )
+
+    [68] => Array
+        (
+            [id] => 366
+            [voucher_no] => JV/23/12/77
+            [debit] => 277094
+            [credit] => 0
+            [balance] => 277094
+            [total_balance] => 14928802
+        )
+
+    [69] => Array
+        (
+            [id] => 377
+            [voucher_no] => JV/23/12/66
+            [debit] => 0
+            [credit] => 30600
+            [balance] => -30600
+            [total_balance] => 14898202
+        )
+
+    [70] => Array
+        (
+            [id] => 391
+            [voucher_no] => JV/23/12/79
+            [debit] => 0
+            [credit] => 2500000
+            [balance] => -2500000
+            [total_balance] => 12398202
+        )
+
+    [71] => Array
+        (
+            [id] => 398
+            [voucher_no] => JV/23/12/80
+            [debit] => 0
+            [credit] => 25258
+            [balance] => -25258
+            [total_balance] => 12372944
+        )
+
+    [72] => Array
+        (
+            [id] => 413
+            [voucher_no] => JV/23/12/78
+            [debit] => 0
+            [credit] => 28500
+            [balance] => -28500
+            [total_balance] => 12344444
+        )
+
+)

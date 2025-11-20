@@ -17,7 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Load .env
 var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"));
-Console.WriteLine("ENV LOADED FROM: " + envPath);
+// Console.WriteLine("ENV LOADED FROM: " + envPath);
 try { DotNetEnv.Env.Load(envPath); } catch { }
 
 
@@ -26,8 +26,8 @@ var connStr = DotNetEnv.Env.GetString("DefaultConnection");
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connStr));
 
-Console.WriteLine($"DefaultConnection: {DotNetEnv.Env.GetString("DefaultConnection")}");
-Console.WriteLine($"RedisConnectionString: {DotNetEnv.Env.GetString("RedisConnectionString")}");
+// Console.WriteLine($"DefaultConnection: {DotNetEnv.Env.GetString("DefaultConnection")}");
+// Console.WriteLine($"RedisConnectionString: {DotNetEnv.Env.GetString("RedisConnectionString")}");
 
 // Redis
 var redisConn = DotNetEnv.Env.GetString("RedisConnectionString");
@@ -38,9 +38,9 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(multiplexer);
 builder.Services.AddSettings(builder.Configuration);
 builder.Services.AddRepositories();
 builder.Services.AddServices();
-Console.WriteLine($"JwtKey: {DotNetEnv.Env.GetString("JwtKey")}");
-Console.WriteLine($"JwtIssuer: {DotNetEnv.Env.GetString("JwtIssuer")}");
-Console.WriteLine($"JwtAudience: {DotNetEnv.Env.GetString("JwtAudience")}");
+// Console.WriteLine($"JwtKey: {DotNetEnv.Env.GetString("JwtKey")}");
+// Console.WriteLine($"JwtIssuer: {DotNetEnv.Env.GetString("JwtIssuer")}");
+// Console.WriteLine($"JwtAudience: {DotNetEnv.Env.GetString("JwtAudience")}");
 // Auth (JWT + CSRF)
 var key = Encoding.UTF8.GetBytes(DotNetEnv.Env.GetString("JwtKey")!);
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -116,7 +116,7 @@ app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<CsrfAndJwtMiddleware>();
-
+app.UseStaticFiles();
 app.UseSwagger();
 app.UseSwaggerUI();
 app.MapControllers();

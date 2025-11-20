@@ -11,6 +11,8 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
         {
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<ITranslationService, TranslationService>();
+            services.AddScoped<IPasswordResetService, PasswordResetService>();
+            services.AddScoped<IMailService, MailService>();
 
             return services;
         }
