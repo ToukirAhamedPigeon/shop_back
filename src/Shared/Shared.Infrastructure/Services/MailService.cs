@@ -50,9 +50,15 @@ namespace shop_back.src.Shared.Application.Services
                 {
                     foreach (var filePath in mail.Attachments)
                     {
+                        // Console.WriteLine($"[ATTACHMENT CHECK] => {filePath} | Exists = {File.Exists(filePath)}");
+
                         if (File.Exists(filePath))
                         {
                             message.Attachments.Add(new Attachment(filePath));
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[WARNING] Attachment not found: {filePath}");
                         }
                     }
                 }
@@ -75,6 +81,103 @@ namespace shop_back.src.Shared.Application.Services
         public async Task<IEnumerable<Mail>> GetAllMailsAsync()
         {
             return await _mailRepository.GetAllAsync();
+        }
+
+         public string BuildEmailTemplate(string bodyContent, string subject = "Notification")
+        {
+            // Load ENV
+            var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", ".env"));
+            try { Env.Load(envPath); } catch { }
+
+            var companyName = Env.GetString("CompanyName") ?? "My Company";
+            var companyAddress = Env.GetString("CompanyAddress") ?? "123, Main Street, City";
+            var companyPhone = Env.GetString("CompanyPhone") ?? "+123456789";
+            var companyEmail = Env.GetString("CompanyEmail") ?? "info@company.com";
+
+            // ================= HTML TEMPLATE =================
+            var template = $@"
+                    <!DOCTYPE html>
+                    <html lang='en'>
+                    <head>
+                    <meta charset='UTF-8'>
+                    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+                    <title>{subject}</title>
+                    <style>
+                        body {{
+                            font-family: 'Arial', sans-serif;
+                            background-color: #f5f7fa;
+                            color: #333;
+                            margin: 0;
+                            padding: 0;
+                        }}
+                        .container {{
+                            max-width: 600px;
+                            margin: 40px auto;
+                            background: #ffffff;
+                            border-radius: 10px;
+                            overflow: hidden;
+                            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+                            border-top: 6px solid #4f46e5; /* primary color */
+                        }}
+                        .header {{
+                            background-color: #4f46e5;
+                            color: #fff;
+                            padding: 20px;
+                            text-align: center;
+                            font-size: 28px;
+                            font-weight: bold;
+                        }}
+                        .body {{
+                            padding: 30px 20px;
+                            font-size: 16px;
+                            line-height: 1.6;
+                            color: #333;
+                        }}
+                        .body a {{
+                            color: #4f46e5;
+                            text-decoration: none;
+                        }}
+                        .footer {{
+                            background-color: #f1f5f9;
+                            padding: 20px;
+                            text-align: center;
+                            font-size: 14px;
+                            color: #555;
+                        }}
+                        .footer a {{
+                            color: #4f46e5;
+                            text-decoration: none;
+                        }}
+                        .button {{
+                            display: inline-block;
+                            padding: 12px 25px;
+                            margin: 15px 0;
+                            background-color: #4f46e5;
+                            color: #fff !important;
+                            font-weight: bold;
+                            border-radius: 6px;
+                            text-decoration: none;
+                        }}
+                    </style>
+                    </head>
+                    <body>
+                    <div class='container'>
+                        <div class='header'>{companyName}</div>
+
+                        <div class='body'>
+                            {bodyContent}
+                        </div>
+
+                        <div class='footer'>
+                            <p>{companyAddress}</p>
+                            <p>Phone: {companyPhone} | Email: <a href='mailto:{companyEmail}'>{companyEmail}</a></p>
+                            <p>Best Regards,<br/>{companyName} Team</p>
+                        </div>
+                    </div>
+                    </body>
+                    </html>";
+
+            return template;
         }
     }
 }

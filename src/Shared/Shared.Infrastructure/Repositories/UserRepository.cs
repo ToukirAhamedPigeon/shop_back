@@ -35,6 +35,14 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     u.Email == email);
         }
 
+         public async Task<User?> GetByIdAsync(Guid id)
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(u =>
+                    !u.IsDeleted && 
+                    u.Id == id);
+        }
+
         public async Task<User?> GetByMobileNoAsync(string mobileNo)
         {
             return await _context.Users

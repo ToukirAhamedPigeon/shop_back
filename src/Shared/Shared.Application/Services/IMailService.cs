@@ -7,5 +7,6 @@ namespace shop_back.src.Shared.Application.Services
         Task SendEmailAsync(Mail mail);
         Task<Mail?> GetMailByIdAsync(int id);
         Task<IEnumerable<Mail>> GetAllMailsAsync();
+        string BuildEmailTemplate(string subject, string body);
     }
 }

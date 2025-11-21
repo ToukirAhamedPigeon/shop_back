@@ -7,6 +7,7 @@ namespace shop_back.src.Shared.Application.Repositories
         Task<User?> GetByIdentifierAsync(string identifier); // renamed for clarity
         Task<User?> GetByEmailAsync(string email);
         Task<User?> GetByMobileNoAsync(string mobileNo);
+        Task<User?> GetByIdAsync(Guid id);
         Task AddAsync(User user);
         Task UpdateAsync(User user);
         Task SaveChangesAsync();

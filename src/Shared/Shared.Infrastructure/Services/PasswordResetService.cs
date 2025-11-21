@@ -21,65 +21,68 @@ public class PasswordResetService : IPasswordResetService
     }
 
     public async Task RequestPasswordResetAsync(string email)
+    {
+        try
         {
-            try
+            var user = await _userRepo.GetByEmailAsync(email);
+            if (user == null) throw new Exception("Email not registered.");
+
+            // Generate token
+            var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+
+            var reset = new PasswordReset
             {
-                var user = await _userRepo.GetByEmailAsync(email);
-                if (user == null) throw new Exception("Email not registered.");
+                UserId = user.Id,
+                Token = token,
+                ExpiresAt = DateTime.UtcNow.AddHours(1),
+                Used = false
+            };
 
-                // Generate token
-                var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            await _resetRepo.AddAsync(reset);
+            await _resetRepo.SaveChangesAsync();
 
-                var reset = new PasswordReset
-                {
-                    UserId = user.Id,
-                    Token = token,
-                    ExpiresAt = DateTime.UtcNow.AddHours(1),
-                    Used = false
-                };
+            // Load environment variables
+            var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", ".env"));
+            try { Env.Load(envPath); } catch { }
 
-                await _resetRepo.AddAsync(reset);
-                await _resetRepo.SaveChangesAsync();
+            var frontendAdminUrl = Env.GetString("FrontendAdminUrl")!;
+            var resetLink = $"{frontendAdminUrl}/reset-password/{token}";
 
-                // Load environment variables
-                var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", ".env"));
-                try { Env.Load(envPath); } catch { }
+            var bodyContent = $@"
+                <h2>Password Reset Request</h2>
+                <p>Hello {user.Name},</p>
+                <p>Click the button below to reset your password. This link expires in 1 hour.</p>
+                <p style='text-align:center;'>
+                    <a href='{resetLink}' class='button'>Reset Password</a>
+                </p>
+                <p>If you did not request this, ignore this email.</p>
+            ";
+            var fullBody = _mailService.BuildEmailTemplate(bodyContent, "Reset your password");
+            // --- Test attachments ---
+            // var attachments = new List<string>
+            // {
+            //     FilePathHelper.GetApiUploadsPath("test", "sample1.pdf"),
+            //     FilePathHelper.GetApiUploadsPath("test", "sample2.txt")
+            // };
 
-                var frontendAdminUrl = Env.GetString("FrontendAdminUrl")!;
-                var resetLink = $"{frontendAdminUrl}/reset-password/{token}";
-
-                var body = $@"
-                    <h2>Password Reset Request</h2>
-                    <p>Hello {user.Name},</p>
-                    <p>Click the link below to reset your password. This link expires in 1 hour.</p>
-                    <a href='{resetLink}' target='_blank'>{resetLink}</a>
-                    <p>If you did not request this, ignore this email.</p>";
-
-                // --- Test attachments ---
-                var attachments = new List<string>
-                {
-                    FilePathHelper.GetApiUploadsPath("test", "sample1.pdf"),
-                    FilePathHelper.GetApiUploadsPath("test", "sample2.txt")
-                };
-
-                await _mailService.SendEmailAsync(new Mail
-                {
-                    FromMail = "noreply@shop.com",
-                    ToMail = user.Email,
-                    Subject = "Reset your password",
-                    Body = body,
-                    ModuleName = "Auth",
-                    Purpose = "PasswordReset",
-                    CreatedBy = user.Id,
-                    Attachments = attachments
-                });
-            }
-            catch (Exception ex)
+            await _mailService.SendEmailAsync(new Mail
             {
-                Console.WriteLine($"Error in RequestPasswordResetAsync: {ex.Message}");
-                throw new Exception("Error sending password reset email.", ex);
-            }
+                FromMail = "noreply@shop.com",
+                ToMail = user.Email,
+                Subject = "Reset your password",
+                Body = fullBody,
+                ModuleName = "Auth",
+                Purpose = "PasswordReset",
+                CreatedBy = user.Id,
+                // Attachments = attachments
+            });
         }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in RequestPasswordResetAsync: {ex.Message}");
+            throw new Exception("Error sending password reset email.", ex);
+        }
+    }
 
     public async Task<bool> ValidateTokenAsync(string token)
     {
@@ -91,10 +94,14 @@ public class PasswordResetService : IPasswordResetService
     public async Task ResetPasswordAsync(ResetPasswordRequestDto request)
     {
         var reset = await _resetRepo.GetByTokenAsync(request.Token);
+        Console.WriteLine($"[TOKEN CHECK] => {reset?.Token} | Used = {reset?.Used} | ExpiresAt = {reset?.ExpiresAt}");
+
         if (reset == null || reset.Used || reset.ExpiresAt < DateTime.UtcNow)
             throw new Exception("Invalid or expired token.");
 
-        var user = await _userRepo.GetByIdentifierAsync(reset.UserId.ToString());
+        Console.WriteLine($"[USER ID CHECK] => {reset.UserId}");
+        var user = await _userRepo.GetByIdAsync(reset.UserId);
+        Console.WriteLine($"[USER CHECK] => {user?.Email} | Exists = {user != null}");
         if (user == null) throw new Exception("User not found.");
 
         // Hash password

@@ -4,30 +4,67 @@ using System.Linq;
 
 namespace shop_back.src.Shared.Infrastructure.Helpers
 {
-    /// <summary>
-    /// Helper to build absolute paths to files in the Shared.API wwwroot/uploads folder.
-    /// </summary>
     public static class FilePathHelper
     {
         /// <summary>
-        /// Returns the absolute path to a file inside Shared.API/wwwroot/uploads.
-        /// You can pass subfolders and filename as parameters.
-        /// Example: GetApiUploadsPath("test", "sample1.pdf")
+        /// Find the actual uploads folder for Shared.API/wwwroot/uploads by scanning upward
+        /// from AppContext.BaseDirectory. Returns a full absolute path combined with
+        /// any provided relative path segments.
         /// </summary>
-        /// <param name="relativePaths">Subfolders + filename relative to uploads folder</param>
-        /// <returns>Absolute file path</returns>
         public static string GetApiUploadsPath(params string[] relativePaths)
         {
-            // Base directory of the running application (usually bin/Debug/netX/)
-            var baseDir = AppContext.BaseDirectory;
+            try
+            {
+                var dir = new DirectoryInfo(AppContext.BaseDirectory);
 
-            // Path to API wwwroot/uploads folder
-            var apiUploads = Path.Combine(baseDir, "..", "..", "..", "Shared.API", "wwwroot", "uploads");
+                while (dir != null)
+                {
+                    // Try several candidate layouts relative to the current ancestor
+                    var candidates = new[]
+                    {
+                        Path.Combine(dir.FullName, "src", "Shared", "Shared.API", "wwwroot", "uploads"),
+                        Path.Combine(dir.FullName, "src", "Shared.API", "wwwroot", "uploads"),
+                        Path.Combine(dir.FullName, "Shared.API", "wwwroot", "uploads"),
+                        Path.Combine(dir.FullName, "wwwroot", "uploads")
+                    };
 
-            // Combine with additional relative paths (subfolders + filename)
-            var fullPath = Path.GetFullPath(Path.Combine(new[] { apiUploads }.Concat(relativePaths).ToArray()));
+                    foreach (var candidate in candidates)
+                    {
+                        if (Directory.Exists(candidate))
+                        {
+                            var final = Path.GetFullPath(Path.Combine(new[] { candidate }.Concat(relativePaths).ToArray()));
+                            Console.WriteLine($"[FilePathHelper] Resolved uploads folder: {candidate}");
+                            Console.WriteLine($"[FilePathHelper] Final path: {final}");
+                            return final;
+                        }
+                    }
 
-            return fullPath;
+                    dir = dir.Parent;
+                }
+
+                // Fallback (previous heuristic) — but remove duplicate Shared.API\Shared.API if present
+                var fallback = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Shared.API", "wwwroot", "uploads");
+                var fallbackFull = Path.GetFullPath(fallback);
+
+                // Normalize duplicate segments: e.g. ...\Shared.API\Shared.API\... -> ...\Shared.API\...
+                var duplicate = Path.DirectorySeparatorChar + "Shared.API" + Path.DirectorySeparatorChar + "Shared.API" + Path.DirectorySeparatorChar;
+                if (fallbackFull.Contains(duplicate))
+                {
+                    fallbackFull = fallbackFull.Replace(duplicate, Path.DirectorySeparatorChar + "Shared.API" + Path.DirectorySeparatorChar);
+                }
+
+                var fallbackResult = Path.GetFullPath(Path.Combine(new[] { fallbackFull }.Concat(relativePaths).ToArray()));
+                Console.WriteLine($"[FilePathHelper] Using fallback uploads path: {fallbackFull}");
+                Console.WriteLine($"[FilePathHelper] Final fallback path: {fallbackResult}");
+                return fallbackResult;
+            }
+            catch (Exception ex)
+            {
+                // Last resort: return combined relative path from base directory
+                var safe = Path.GetFullPath(Path.Combine(new[] { AppContext.BaseDirectory, "wwwroot", "uploads" }.Concat(relativePaths).ToArray()));
+                Console.WriteLine($"[FilePathHelper] Error resolving uploads path: {ex.Message}. Returning safe path: {safe}");
+                return safe;
+            }
         }
     }
 }
