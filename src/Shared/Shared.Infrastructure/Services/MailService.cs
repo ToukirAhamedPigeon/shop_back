@@ -89,10 +89,10 @@ namespace shop_back.src.Shared.Application.Services
             var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", ".env"));
             try { Env.Load(envPath); } catch { }
 
-            var companyName = Env.GetString("CompanyName") ?? "My Company";
-            var companyAddress = Env.GetString("CompanyAddress") ?? "123, Main Street, City";
-            var companyPhone = Env.GetString("CompanyPhone") ?? "+123456789";
-            var companyEmail = Env.GetString("CompanyEmail") ?? "info@company.com";
+            var companyName = Env.GetString("COMPANY_NAME") ?? "My Company";
+            var companyAddress = Env.GetString("COMPANY_ADDRESS") ?? "123, Main Street, City";
+            var companyPhone = Env.GetString("COMPANY_PHONE") ?? "+123456789";
+            var companyEmail = Env.GetString("COMPANY_EMAIL") ?? "info@company.com";
 
             // ================= HTML TEMPLATE =================
             var template = $@"
