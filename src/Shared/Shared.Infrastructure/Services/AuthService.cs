@@ -5,6 +5,7 @@ using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Application.DTOs.Auth;
 using shop_back.src.Shared.Application.Repositories;
 using shop_back.src.Shared.Domain.Entities;
+using shop_back.src.Shared.Infrastructure.Helpers; // for UserLogHelper
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -17,24 +18,26 @@ namespace shop_back.src.Shared.Infrastructure.Services
         private readonly IRefreshTokenRepository _refreshTokenRepo;
         private readonly IRolePermissionRepository _rolePermissionRepo;
         private readonly IConfiguration _config;
+        private readonly UserLogHelper _userLogHelper;
 
         public AuthService(
             IUserRepository userRepo,
             IRefreshTokenRepository refreshTokenRepo,
             IRolePermissionRepository rolePermissionRepo,
-            IConfiguration config)
+            IConfiguration config,
+            UserLogHelper userLogHelper)
         {
             _userRepo = userRepo;
             _refreshTokenRepo = refreshTokenRepo;
             _rolePermissionRepo = rolePermissionRepo;
             _config = config;
+            _userLogHelper = userLogHelper;
         }
 
         public async Task<AuthResponseDto?> LoginAsync(LoginRequestDto request)
         {
             var user = await _userRepo.GetByIdentifierAsync(request.Identifier);
 
-            // ✅ Correction: safer null + password check
             if (user == null || string.IsNullOrWhiteSpace(user.Password) ||
                 !BCrypt.Net.BCrypt.Verify(request.Password, user.Password))
             {
@@ -52,9 +55,17 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 ExpiresAt = DateTime.UtcNow.AddDays(7)
             };
 
-            // ✅ Correction: only one SaveChangesAsync needed
             await _refreshTokenRepo.AddAsync(refreshToken);
             await _refreshTokenRepo.RemoveExpiredAsync();
+
+            // ✅ User log for login
+            await _userLogHelper.LogAsync(
+                userId: user.Id,
+                actionType: "Login",
+                detail: $"User '{user.Username}' logged in successfully.",
+                modelName: "User",
+                modelId: user.Id
+            );
 
             return new AuthResponseDto
             {
@@ -68,13 +79,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
         {
             var existing = await _refreshTokenRepo.GetByTokenAsync(token);
 
-            // ✅ Correction: safer console debugging with IgnoreCycles
-
-            // ✅ Correction: null + expiry validation
             if (existing == null || existing.ExpiresAt <= DateTime.UtcNow)
-            {
                 return null;
-            }
 
             await _refreshTokenRepo.RemoveExpiredAsync();
 
@@ -83,18 +89,28 @@ namespace shop_back.src.Shared.Infrastructure.Services
             return new AuthResponseDto
             {
                 AccessToken = newAccessToken,
-                RefreshToken = token, // ✅ keeping same refresh token until rotation implemented
+                RefreshToken = token,
                 User = await BuildUserDtoAsync(existing.User)
             };
         }
 
         public async Task LogoutAsync(string token)
         {
-            try{
+            try
+            {
                 var refreshToken = await _refreshTokenRepo.GetByTokenAsync(token);
                 if (refreshToken != null)
                 {
                     await _refreshTokenRepo.RevokeAsync(refreshToken);
+
+                    // ✅ User log for logout
+                    await _userLogHelper.LogAsync(
+                        userId: refreshToken.UserId,
+                        actionType: "Logout",
+                        detail: $"User logged out successfully.",
+                        modelName: "User",
+                        modelId: refreshToken.UserId
+                    );
                 }
             }
             catch (Exception ex)
@@ -105,8 +121,18 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         public async Task LogoutAllDevicesAsync(Guid userId)
         {
-            try{
+            try
+            {
                 await _refreshTokenRepo.RevokeAllAsync(userId);
+
+                // ✅ User log for logout all devices
+                await _userLogHelper.LogAsync(
+                    userId: userId,
+                    actionType: "LogoutAllDevices",
+                    detail: "User logged out from all devices.",
+                    modelName: "User",
+                    modelId: userId
+                );
             }
             catch (Exception ex)
             {
@@ -116,8 +142,18 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         public async Task LogoutOtherDevicesAsync(string exceptRefreshToken, Guid userId)
         {
-            try{
+            try
+            {
                 await _refreshTokenRepo.RevokeOtherAsync(exceptRefreshToken, userId);
+
+                // ✅ User log for logout other devices
+                await _userLogHelper.LogAsync(
+                    userId: userId,
+                    actionType: "LogoutOtherDevices",
+                    detail: "User logged out from other devices except current.",
+                    modelName: "User",
+                    modelId: userId
+                );
             }
             catch (Exception ex)
             {
@@ -127,7 +163,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         private string GenerateJwtToken(User user)
         {
-            // ✅ Correction: ensure claims are never null
             var claims = new[]
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
@@ -135,14 +170,13 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
                 new Claim("mobile_no", user.MobileNo ?? string.Empty)
             };
+
             var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", ".env"));
-            // Console.WriteLine("ENV LOADED FROM: " + envPath);
             try { DotNetEnv.Env.Load(envPath); } catch { }
+
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(DotNetEnv.Env.GetString("JwtKey")!));
-            // Console.WriteLine("JWT KEY: " + DotNetEnv.Env.GetString("JwtKey"));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-            // ✅ Correction: expiry configurable, defaults to 10 mins
             var tokenExpiryMinutes = int.TryParse(DotNetEnv.Env.GetString("JwtExpiryMinutes"), out var minutes) ? minutes : 10;
             var expires = DateTime.UtcNow.AddMinutes(tokenExpiryMinutes);
 
@@ -159,7 +193,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         private async Task<UserDto> BuildUserDtoAsync(User user)
         {
-            // ✅ Correction: fixed operator issue with ?? by normalizing to array
             var roles = await _rolePermissionRepo.GetRoleNamesByUserIdAsync(user.Id) ?? Array.Empty<string>();
             var permissions = await _rolePermissionRepo.GetAllPermissionsByUserIdAsync(user.Id) ?? Array.Empty<string>();
 

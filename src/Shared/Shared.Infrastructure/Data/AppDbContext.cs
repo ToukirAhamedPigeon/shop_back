@@ -53,6 +53,34 @@ namespace shop_back.src.Shared.Infrastructure.Data
 
             // ✅ No HasConversion needed for bool <-> PostgreSQL boolean
 
+            // -------------------------------------------
+            // ✅ USERLOG table (jsonb column)
+            // -------------------------------------------
+            var userLog = modelBuilder.Entity<UserLog>();
+
+            userLog.ToTable("user_logs");
+
+            userLog.HasKey(x => x.Id);
+
+            userLog.Property(x => x.Changes)
+                .HasColumnType("jsonb");
+
+            userLog.Property(x => x.CreatedAt).HasColumnName("created_at");
+            userLog.Property(x => x.CreatedAtId).HasColumnName("created_at_id");
+            userLog.Property(x => x.CreatedBy).HasColumnName("created_by");
+
+            userLog.Property(x => x.ActionType).HasColumnName("action_type");
+            userLog.Property(x => x.ModelName).HasColumnName("model_name");
+            userLog.Property(x => x.ModelId).HasColumnName("model_id");
+            userLog.Property(x => x.Detail).HasColumnName("detail");
+
+            // ✅ New columns mapped correctly
+            userLog.Property(x => x.IpAddress).HasColumnName("ip_address");
+            userLog.Property(x => x.Browser).HasColumnName("browser");
+            userLog.Property(x => x.Device).HasColumnName("device");
+            userLog.Property(x => x.OperatingSystem).HasColumnName("os");
+            userLog.Property(x => x.UserAgent).HasColumnName("user_agent");
+
             // RefreshToken -> User relation
             modelBuilder.Entity<RefreshToken>()
                 .HasOne(r => r.User)

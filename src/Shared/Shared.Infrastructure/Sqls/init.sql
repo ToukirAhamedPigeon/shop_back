@@ -278,3 +278,11 @@ create table public.password_reset (
     on update cascade
     on delete cascade
 );
+
+ALTER TABLE user_logs DROP CONSTRAINT user_logs_action_type_check;
+
+ALTER TABLE user_logs
+ADD CONSTRAINT user_logs_action_type_check
+CHECK (action_type IN (
+    'Create', 'Update', 'Delete', 'Login', 'Logout', 'LogoutAllDevices', 'LogoutOtherDevices'
+));
