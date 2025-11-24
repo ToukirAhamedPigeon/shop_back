@@ -5,7 +5,7 @@ using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Application.DTOs.Auth;
 using shop_back.src.Shared.Application.Repositories;
 using shop_back.src.Shared.Domain.Entities;
-using shop_back.src.Shared.Infrastructure.Helpers; // for UserLogHelper
+using shop_back.src.Shared.Infrastructure.Helpers;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;

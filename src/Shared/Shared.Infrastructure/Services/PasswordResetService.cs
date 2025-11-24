@@ -5,19 +5,21 @@ using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Application.DTOs.Auth;
 using shop_back.src.Shared.Domain.Entities;
 using DotNetEnv;
-using shop_back.src.Shared.Infrastructure.Helpers;
+using shop_back.src.Shared.Infrastructure.Helpers; 
 
 public class PasswordResetService : IPasswordResetService
 {
     private readonly IUserRepository _userRepo;
     private readonly IPasswordResetRepository _resetRepo;
     private readonly IMailService _mailService;
+    private readonly UserLogHelper _userLogHelper;
 
-    public PasswordResetService(IUserRepository userRepo, IPasswordResetRepository resetRepo, IMailService mailService)
+    public PasswordResetService(IUserRepository userRepo, IPasswordResetRepository resetRepo, IMailService mailService, UserLogHelper userLogHelper)
     {
         _userRepo = userRepo;
         _resetRepo = resetRepo;
         _mailService = mailService;
+        _userLogHelper = userLogHelper;
     }
 
     public async Task RequestPasswordResetAsync(string email)
@@ -104,7 +106,10 @@ public class PasswordResetService : IPasswordResetService
         Console.WriteLine($"[USER CHECK] => {user?.Email} | Exists = {user != null}");
         if (user == null) throw new Exception("User not found.");
 
-        // Hash password
+        // 🟡 Store Old Password Hash
+        var oldPasswordHash = user.Password;
+
+        // 🔐 Hash New Password
         user.Password = BCrypt.Net.BCrypt.HashPassword(request.Password);
 
         reset.Used = true;
@@ -113,5 +118,34 @@ public class PasswordResetService : IPasswordResetService
         await _resetRepo.UpdateAsync(reset);
         await _userRepo.SaveChangesAsync();
         await _resetRepo.SaveChangesAsync();
+
+        // ---------------------------------------------------------
+        // ✅ CREATE USER LOG ENTRY (Password Reset)
+        // ---------------------------------------------------------
+
+        // Convert the changes to JSON string
+        var changeObject = new
+        {
+            before = new { Password = oldPasswordHash },
+            after = new { Password = user.Password }
+        };
+
+        string changesJson = Newtonsoft.Json.JsonConvert.SerializeObject(changeObject);
+
+        try
+        {
+            await _userLogHelper.LogAsync(
+                userId: user.Id,
+                actionType: "Update",
+                detail: "User successfully reset password.",
+                changes: changesJson,      // ✔ string value
+                modelName: "User",
+                modelId: user.Id
+            );
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("UserLog Error (Password Reset): " + ex.Message);
+        }
     }
 }
