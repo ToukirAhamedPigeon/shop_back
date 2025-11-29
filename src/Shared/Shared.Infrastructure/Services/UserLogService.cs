@@ -1,6 +1,7 @@
 using shop_back.src.Shared.Domain.Entities;
 using shop_back.src.Shared.Application.Repositories;
 using shop_back.src.Shared.Application.Services;
+using shop_back.src.Shared.Application.DTOs.UserLogs;
 
 namespace shop_back.src.Shared.Infrastructure.Services
 {
@@ -46,22 +47,27 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
             await _repository.CreateAsync(log);
             await _repository.SaveChangesAsync();
+
             return log;
         }
 
-        public async Task<IEnumerable<UserLog>> GetLogsAsync()
+        public async Task<object> GetFilteredLogsAsync(UserLogFilterRequest req)
         {
-            return await _repository.GetAllAsync();
+            var (logs, totalCount, pageIndex, pageSize) = await _repository.GetFilteredAsync(req);
+
+            return new
+            {
+                logs,
+                totalCount,
+                pageIndex,
+                pageSize
+            };
         }
 
-        public async Task<IEnumerable<UserLog>> GetLogsByUserAsync(Guid createdBy)
-        {
-            return await _repository.GetByUserIdAsync(createdBy);
-        }
+        public Task<IEnumerable<UserLog>> GetLogsByUserAsync(Guid createdBy)
+            => _repository.GetByUserIdAsync(createdBy);
 
-        public async Task<UserLog?> GetLogAsync(Guid id)
-        {
-            return await _repository.GetByIdAsync(id);
-        }
+        public Task<UserLog?> GetLogAsync(Guid id)
+            => _repository.GetByIdAsync(id);
     }
 }

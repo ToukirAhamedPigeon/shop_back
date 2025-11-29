@@ -20,6 +20,7 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
             services.AddScoped<IPasswordResetRepository, PasswordResetRepository>();
             services.AddScoped<IOtpRepository, OtpRepository>();
             services.AddScoped<IUserLogRepository, UserLogRepository>();
+            services.AddScoped<IUserTableCombinationRepository, UserTableCombinationRepository>();
             return services;
         }
     }

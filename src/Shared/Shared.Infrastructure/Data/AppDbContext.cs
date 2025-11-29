@@ -153,11 +153,15 @@ namespace shop_back.src.Shared.Infrastructure.Data
                 .OnDelete(DeleteBehavior.Cascade);
 
                  // Mail -> User relationship
-                modelBuilder.Entity<Mail>()
-                    .HasOne(m => m.CreatedByUser)
-                    .WithMany() // Optional: No collection in User
-                    .HasForeignKey(m => m.CreatedBy)
-                    .OnDelete(DeleteBehavior.SetNull); // Nullable FK
-                    }
+            modelBuilder.Entity<Mail>()
+                .HasOne(m => m.CreatedByUser)
+                .WithMany() // Optional: No collection in User
+                .HasForeignKey(m => m.CreatedBy)
+                .OnDelete(DeleteBehavior.SetNull); // Nullable FK
+
+             modelBuilder.Entity<UserTableCombination>()
+                .Property(e => e.ShowColumnCombinations)
+                .HasColumnType("text[]");
+        }    
     }
 }

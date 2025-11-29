@@ -12,7 +12,7 @@ namespace shop_back.src.Shared.Domain.Entities
         public Guid Id { get; set; } = Guid.NewGuid();
 
         [Column("table_id")]
-        public Guid TableId { get; set; }
+        public string TableId { get; set; } = string.Empty;
 
         [Column("show_column_combinations")]
         public string[] ShowColumnCombinations { get; set; } = Array.Empty<string>();

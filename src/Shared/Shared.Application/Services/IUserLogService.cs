@@ -1,7 +1,5 @@
 using shop_back.src.Shared.Domain.Entities;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+using shop_back.src.Shared.Application.DTOs.UserLogs;
 
 namespace shop_back.src.Shared.Application.Services
 {
@@ -21,7 +19,7 @@ namespace shop_back.src.Shared.Application.Services
             string? userAgent = null
         );
 
-        Task<IEnumerable<UserLog>> GetLogsAsync();
+        Task<object> GetFilteredLogsAsync(UserLogFilterRequest request);
         Task<IEnumerable<UserLog>> GetLogsByUserAsync(Guid userId);
         Task<UserLog?> GetLogAsync(Guid id);
     }
