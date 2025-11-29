@@ -13,6 +13,7 @@ namespace shop_back.src.Shared.Application.DTOs.UserLogs
         public string? CreatedByName { get; set; }
         public Guid CreatedBy { get; set; }
         public DateTime CreatedAt { get; set; }
+        public long CreatedAtId { get; set; }
         public string? IpAddress { get; set; }
         public string? Browser { get; set; }
         public string? Device { get; set; }

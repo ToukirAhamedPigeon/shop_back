@@ -94,7 +94,13 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                         CreatedBy = log.CreatedBy,
                         CreatedByName = user.Name, 
                         CreatedAt = log.CreatedAt,
-                        Changes = log.Changes
+                        Changes = log.Changes,
+                        CreatedAtId = log.CreatedAtId,
+                        IpAddress = log.IpAddress,
+                        Browser = log.Browser,
+                        Device = log.Device,
+                        OperatingSystem=log.OperatingSystem,
+                        UserAgent=log.UserAgent
                     });
 
             int totalCount = await logsQuery.CountAsync();
