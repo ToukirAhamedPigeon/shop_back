@@ -46,7 +46,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             await _context.SaveChangesAsync();
         }
 
-        public async Task<(IEnumerable<UserLogDto> Logs, int TotalCount, int PageIndex, int PageSize)> GetFilteredAsync(UserLogFilterRequest req)
+        public async Task<(IEnumerable<UserLogDto> Logs, int TotalCount, int GrandTotalCount, int PageIndex, int PageSize)> GetFilteredAsync(UserLogFilterRequest req)
         {
             var query = _context.UserLogs.AsQueryable();
 
@@ -104,6 +104,8 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     });
 
             int totalCount = await logsQuery.CountAsync();
+            int grandTotalCount = await _context.UserLogs.CountAsync();
+
 
             // Sorting
             bool desc = req.SortOrder?.ToLower() == "desc";
@@ -121,7 +123,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 .Take(req.Limit)
                 .ToListAsync();
 
-            return (logs, totalCount, req.Page - 1, req.Limit); 
+            return (logs, totalCount, grandTotalCount, req.Page - 1, req.Limit); 
         }
     }
 }

@@ -31,12 +31,12 @@ namespace shop_back.src.Shared.Api.Controllers
         }
 
         [HttpPut]
-        public async Task<IActionResult> Put([FromHeader] Guid userId, [FromBody] UserTableCombinationDTO dto)
+        public async Task<IActionResult> Put([FromBody] UserTableCombinationDTO dto)
         {
-            if (userId == Guid.Empty || string.IsNullOrEmpty(dto.TableId))
+            if (dto.UserId == Guid.Empty || string.IsNullOrEmpty(dto.TableId))
                 return BadRequest("Invalid userId or tableId");
 
-            await _service.SaveOrUpdateAsync(userId, dto);
+            await _service.SaveOrUpdateAsync(dto.UserId, dto);
             return Ok(new { success = true });
         }
     }

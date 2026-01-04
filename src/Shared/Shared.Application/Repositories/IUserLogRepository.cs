@@ -12,6 +12,6 @@ namespace shop_back.src.Shared.Application.Repositories
         Task<IEnumerable<UserLog>> GetByUserIdAsync(Guid userId);
         Task<IEnumerable<UserLog>> GetAllAsync();
         Task SaveChangesAsync();
-        Task<(IEnumerable<UserLogDto> Logs, int TotalCount, int PageIndex, int PageSize)> GetFilteredAsync(UserLogFilterRequest req);
+        Task<(IEnumerable<UserLogDto> Logs, int TotalCount, int GrandTotalCount, int PageIndex, int PageSize)> GetFilteredAsync(UserLogFilterRequest req);
     }
 }

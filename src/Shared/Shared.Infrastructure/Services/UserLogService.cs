@@ -53,12 +53,13 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         public async Task<object> GetFilteredLogsAsync(UserLogFilterRequest req)
         {
-            var (logs, totalCount, pageIndex, pageSize) = await _repository.GetFilteredAsync(req);
+            var (logs, totalCount, grandTotalCount, pageIndex, pageSize) = await _repository.GetFilteredAsync(req);
 
             return new
             {
                 logs,
                 totalCount,
+                grandTotalCount,
                 pageIndex,
                 pageSize
             };
