@@ -3,6 +3,7 @@ using shop_back.src.Shared.Domain.Entities;
 using shop_back.src.Shared.Application.Repositories;
 using shop_back.src.Shared.Infrastructure.Data;
 using shop_back.src.Shared.Application.DTOs.UserLogs;
+using shop_back.src.Shared.Application.DTOs.Common;
 
 namespace shop_back.src.Shared.Infrastructure.Repositories
 {
@@ -124,6 +125,90 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 .ToListAsync();
 
             return (logs, totalCount, grandTotalCount, req.Page - 1, req.Limit); 
+        }
+    
+        public async Task<IEnumerable<SelectOptionDto>> GetDistinctModelNamesAsync(SelectRequestDto req)
+        {
+            var query = _context.UserLogs.AsQueryable();
+
+            // 🔹 Apply 'where' filters safely
+            if (req.Where != null && req.Where.TryGetValue("ModelName", out var modelNameNode))
+            {
+                var modelName = modelNameNode?.ToString() ?? "";
+                if (!string.IsNullOrEmpty(modelName))
+                    query = query.Where(x => x.ModelName.Contains(modelName));
+            }
+
+            // 🔹 Apply search
+            if (!string.IsNullOrWhiteSpace(req.Search))
+                query = query.Where(x => x.ModelName.Contains(req.Search));
+
+            var result = await query
+                .Select(x => x.ModelName)
+                .Distinct()
+                .OrderBy(x => x)
+                .Skip(req.Skip)
+                .Take(req.Limit)
+                .Select(x => new SelectOptionDto { Value = x, Label = x })
+                .ToListAsync();
+
+            return result;
+        }
+
+        public async Task<IEnumerable<SelectOptionDto>> GetDistinctActionTypesAsync(SelectRequestDto req)
+        {
+            var query = _context.UserLogs.AsQueryable();
+
+            if (req.Where != null && req.Where.TryGetValue("ActionType", out var actionTypeNode))
+            {
+                var actionType = actionTypeNode?.ToString() ?? "";
+                if (!string.IsNullOrEmpty(actionType))
+                    query = query.Where(x => x.ActionType.Contains(actionType));
+            }
+
+            if (!string.IsNullOrWhiteSpace(req.Search))
+                query = query.Where(x => x.ActionType.Contains(req.Search));
+
+            var result = await query
+                .Select(x => x.ActionType)
+                .Distinct()
+                .OrderBy(x => x)
+                .Skip(req.Skip)
+                .Take(req.Limit)
+                .Select(x => new SelectOptionDto { Value = x, Label = x })
+                .ToListAsync();
+
+            return result;
+        }
+
+        public async Task<IEnumerable<SelectOptionDto>> GetDistinctCreatorsAsync(SelectRequestDto req)
+        {
+            var query = _context.UserLogs
+                .Join(_context.Users,
+                    log => log.CreatedBy,
+                    user => user.Id,
+                    (log, user) => new { log, user })
+                .AsQueryable();
+
+            if (req.Where != null && req.Where.TryGetValue("CreatedByName", out var createdByNameNode))
+            {
+                var createdByName = createdByNameNode?.ToString() ?? "";
+                if (!string.IsNullOrEmpty(createdByName))
+                    query = query.Where(x => x.user.Name.Contains(createdByName));
+            }
+
+            if (!string.IsNullOrWhiteSpace(req.Search))
+                query = query.Where(x => x.user.Name.Contains(req.Search));
+
+            var result = await query
+                .Select(x => new SelectOptionDto { Value = x.user.Id.ToString(), Label = x.user.Name })
+                .Distinct()
+                .OrderBy(x => x.Label)
+                .Skip(req.Skip)
+                .Take(req.Limit)
+                .ToListAsync();
+
+            return result;
         }
     }
 }

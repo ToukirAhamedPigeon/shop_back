@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using shop_back.src.Shared.Application.DTOs.UserLogs;
 using shop_back.src.Shared.Application.Services;
+using shop_back.src.Shared.Application.DTOs.Common;
 
 namespace shop_back.src.Shared.API.Controllers
 {
@@ -46,6 +47,31 @@ namespace shop_back.src.Shared.API.Controllers
             };
 
             return Ok(dto);
+        }
+
+        // 🔹 Collection Name Select
+        [HttpPost("collections")]
+        public async Task<IActionResult> GetCollections([FromBody] SelectRequestDto? req= null)
+        {
+            req ??= new SelectRequestDto();
+            var result = await _service.GetCollectionsAsync(req);
+            return Ok(result);
+        }
+
+        [HttpPost("action-types")]
+        public async Task<IActionResult> GetActionTypes([FromBody] SelectRequestDto? req = null)
+        {
+            req ??= new SelectRequestDto();
+            var result = await _service.GetActionTypesAsync(req);
+            return Ok(result);
+        }
+
+        [HttpPost("creators")]
+        public async Task<IActionResult> GetCreators([FromBody] SelectRequestDto? req = null)
+        {
+            req ??= new SelectRequestDto();
+            var result = await _service.GetCreatorsAsync(req);
+            return Ok(result);
         }
     }
 }

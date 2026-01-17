@@ -1,17 +1,24 @@
+using StackExchange.Redis;
 using shop_back.src.Shared.Domain.Entities;
 using shop_back.src.Shared.Application.Repositories;
 using shop_back.src.Shared.Application.Services;
+using shop_back.src.Shared.Application.DTOs.Common;
 using shop_back.src.Shared.Application.DTOs.UserLogs;
+using System.Text.Json;
+using shop_back.src.Shared.Infrastructure.Helpers;
 
 namespace shop_back.src.Shared.Infrastructure.Services
 {
     public class UserLogService : IUserLogService
     {
         private readonly IUserLogRepository _repository;
+        private readonly IDatabase _cache;
+        private readonly TimeSpan _cacheTtl = TimeSpan.FromHours(1); // adjust expiry
 
-        public UserLogService(IUserLogRepository repository)
+        public UserLogService(IUserLogRepository repository, IConnectionMultiplexer redis)
         {
             _repository = repository;
+              _cache = redis.GetDatabase();
         }
 
         public async Task<UserLog> CreateLogAsync(
@@ -70,5 +77,45 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         public Task<UserLog?> GetLogAsync(Guid id)
             => _repository.GetByIdAsync(id);
+
+        private async Task<IEnumerable<SelectOptionDto>> GetOrSetCacheAsync(
+            string cacheKey,
+            Func<Task<IEnumerable<SelectOptionDto>>> factory)
+        {
+            var cached = await _cache.StringGetAsync(cacheKey);
+            if (cached.HasValue)
+            {
+                return JsonSerializer.Deserialize<List<SelectOptionDto>>(cached!) ?? new List<SelectOptionDto>();
+            }
+
+            var result = await factory();
+
+            // Format labels
+            foreach (var item in result)
+            {
+                item.Label = LabelFormatter.ToReadable(item.Label);
+            }
+
+            await _cache.StringSetAsync(cacheKey, JsonSerializer.Serialize(result), _cacheTtl);
+            return result;
+        }
+
+        public Task<IEnumerable<SelectOptionDto>> GetCollectionsAsync(SelectRequestDto req)
+        {
+            var cacheKey = "UserLog:Collections";
+            return GetOrSetCacheAsync(cacheKey, () => _repository.GetDistinctModelNamesAsync(req));
+        }
+
+        public Task<IEnumerable<SelectOptionDto>> GetActionTypesAsync(SelectRequestDto req)
+        {
+            var cacheKey = "UserLog:ActionTypes";
+            return GetOrSetCacheAsync(cacheKey, () => _repository.GetDistinctActionTypesAsync(req));
+        }
+
+        public Task<IEnumerable<SelectOptionDto>> GetCreatorsAsync(SelectRequestDto req)
+        {
+            var cacheKey = "UserLog:Creators";
+            return GetOrSetCacheAsync(cacheKey, () => _repository.GetDistinctCreatorsAsync(req));
+        }
     }
 }
