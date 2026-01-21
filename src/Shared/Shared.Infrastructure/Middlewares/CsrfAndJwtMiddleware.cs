@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore.Query;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -19,47 +18,41 @@ namespace shop_back.src.Shared.Infrastructure.Middlewares
 
         public async Task InvokeAsync(HttpContext context)
         {
+            // Check if Authorization header has Bearer token
             var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
             var hasJwt = !string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ");
 
-            // Only check CSRF if no JWT token exists AND it's an unsafe method
-            if (
-                !hasJwt &&
+            // Only validate CSRF if no JWT AND HTTP method is unsafe
+            if (!hasJwt &&
                 (HttpMethods.IsPost(context.Request.Method) ||
-                HttpMethods.IsPut(context.Request.Method) ||
-                HttpMethods.IsDelete(context.Request.Method) ||
-                HttpMethods.IsPatch(context.Request.Method)))
+                 HttpMethods.IsPut(context.Request.Method) ||
+                 HttpMethods.IsDelete(context.Request.Method) ||
+                 HttpMethods.IsPatch(context.Request.Method)))
             {
                 try
                 {
                     await _antiforgery.ValidateRequestAsync(context);
                 }
-                catch (Exception ex)
+                catch
                 {
-                    Console.WriteLine("CSRF validation failed!");
-                    Console.WriteLine($"Message: {ex.Message}");
-                    Console.WriteLine($"StackTrace: {ex.StackTrace}");
-
-                    foreach (var header in context.Request.Headers)
-                        // Console.WriteLine($"Header: {header.Key} = {header.Value}");
-
-                    foreach (var cookie in context.Request.Cookies)
-                        // Console.WriteLine($"Cookie: {cookie.Key} = {cookie.Value}");
-
                     context.Response.StatusCode = StatusCodes.Status403Forbidden;
                     await context.Response.WriteAsync("CSRF validation failed.");
                     return;
                 }
             }
 
-            // For authenticated endpoints, check JWT if needed
-            if (!context.Request.Path.StartsWithSegments("/api/csrf/token") &&
-                !context.Request.Path.StartsWithSegments("/api/translations/get") &&
-                !context.Request.Path.StartsWithSegments("/swagger") &&
-                !context.Request.Path.StartsWithSegments("/api/auth/login") &&
-                !context.Request.Path.StartsWithSegments("/api/auth/password-reset") &&
-                !context.Request.Path.StartsWithSegments("/api/auth/refresh") &&
-                !hasJwt)
+            // Define public endpoints that do NOT require JWT
+            var path = context.Request.Path;
+            var isPublicEndpoint =
+                path.StartsWithSegments("/api/csrf/token") ||
+                path.StartsWithSegments("/api/translations/get") ||
+                path.StartsWithSegments("/swagger") ||
+                path.StartsWithSegments("/api/auth/login") ||
+                path.StartsWithSegments("/api/auth/password-reset") ||
+                path.StartsWithSegments("/api/auth/refresh");
+
+            // Return 401 if JWT missing for protected endpoints
+            if (!isPublicEndpoint && !hasJwt)
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 await context.Response.WriteAsync("Unauthorized.");

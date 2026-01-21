@@ -3,6 +3,8 @@ using Microsoft.Extensions.DependencyInjection;
 using shop_back.src.Shared.Infrastructure.Services;
 using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Infrastructure.Helpers;
+using shop_back.src.Shared.Application.Services.Authorization;
+using shop_back.src.Shared.Infrastructure.Services.Authorization;
 
 namespace shop_back.src.Shared.Infrastructure.Extensions
 {

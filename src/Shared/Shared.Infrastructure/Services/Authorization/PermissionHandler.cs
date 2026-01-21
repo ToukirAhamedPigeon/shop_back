@@ -1,14 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
-using shop_back.src.Shared.Application.Services.Authorization;
 using shop_back.src.Shared.Application.Repositories;
 using shop_back.src.Shared.Domain.Enums;
 using System.Security.Claims;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace shop_back.src.Shared.Infrastructure.Services.Authorization
 {
-    public class PermissionHandlerService : IPermissionHandlerService, IAuthorizationHandler
+    public class PermissionHandlerService
+        : AuthorizationHandler<PermissionRequirement>
     {
         private readonly IRolePermissionRepository _rolePermissionRepo;
 
@@ -17,37 +15,55 @@ namespace shop_back.src.Shared.Infrastructure.Services.Authorization
             _rolePermissionRepo = rolePermissionRepo;
         }
 
-        // Application Layer method
-        public async Task<bool> HandleAsync(Guid userId, IPermissionRequirement requirement)
+        protected override async Task HandleRequirementAsync(
+            AuthorizationHandlerContext context,
+            PermissionRequirement requirement
+        )
         {
-            var allPermissions = await _rolePermissionRepo.GetAllPermissionsByUserIdAsync(userId);
-
-            return requirement.Relation switch
-            {
-                PermissionRelation.Or => requirement.PermissionNames.Any(p => allPermissions.Contains(p)),
-                PermissionRelation.And => requirement.PermissionNames.All(p => allPermissions.Contains(p)),
-                _ => false
-            };
-        }
-
-        // ASP.NET Core AuthorizationHandler implementation
-        public async Task HandleAsync(AuthorizationHandlerContext context)
-        {
-            var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                            ?? context.User.FindFirst("sub")?.Value;
-
-            if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
-            {
-                context.Fail();
+            if (!context.User.Identity?.IsAuthenticated ?? true)
                 return;
+
+            var userIdClaim =
+                context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+                context.User.FindFirst("sub")?.Value;
+
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return;
+
+            // 🔹 1️⃣ Try JWT claims first (FAST)
+            var claimPermissions = context.User
+                .FindAll("permission")
+                .Select(c => c.Value)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            bool authorized;
+
+            if (claimPermissions.Any())
+            {
+                authorized = requirement.Relation switch
+                {
+                    PermissionRelation.Or  => requirement.Permissions.Any(p => claimPermissions.Contains(p)),
+                    PermissionRelation.And => requirement.Permissions.All(p => claimPermissions.Contains(p)),
+                    _ => false
+                };
+            }
+            else
+            {
+                // 🔹 2️⃣ Fallback to DB (SAFE)
+                var dbPermissions =
+                    await _rolePermissionRepo.GetAllPermissionsByUserIdAsync(userId)
+                    ?? Array.Empty<string>();
+
+                authorized = requirement.Relation switch
+                {
+                    PermissionRelation.Or  => requirement.Permissions.Any(p => dbPermissions.Contains(p)),
+                    PermissionRelation.And => requirement.Permissions.All(p => dbPermissions.Contains(p)),
+                    _ => false
+                };
             }
 
-            foreach (var requirement in context.PendingRequirements.OfType<PermissionRequirement>())
-            {
-                bool authorized = await HandleAsync(userId, requirement); // uses IPermissionRequirement interface
-                if (authorized)
-                    context.Succeed(requirement); // succeeds as IAuthorizationRequirement
-            }
+            if (authorized)
+                context.Succeed(requirement);
         }
     }
 }

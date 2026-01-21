@@ -163,13 +163,19 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         private string GenerateJwtToken(User user)
         {
-            var claims = new[]
+            var permissions = _rolePermissionRepo.GetAllPermissionsByUserIdAsync(user.Id).Result;
+            var claimsList = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.UniqueName, user.Username ?? string.Empty),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
                 new Claim("mobile_no", user.MobileNo ?? string.Empty)
             };
+
+            foreach (var permission in permissions)
+            {
+                claimsList.Add(new Claim("permission", permission));
+            }
 
             var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", ".env"));
             try { DotNetEnv.Env.Load(envPath); } catch { }
@@ -183,7 +189,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
             var token = new JwtSecurityToken(
                 issuer: DotNetEnv.Env.GetString("JwtIssuer"),
                 audience: DotNetEnv.Env.GetString("JwtAudience"),
-                claims: claims,
+                claims: claimsList,
                 expires: expires,
                 signingCredentials: creds
             );

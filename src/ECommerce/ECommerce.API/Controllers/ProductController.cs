@@ -14,7 +14,7 @@ namespace shop_back.src.ECommerce.API.Controllers
     {
         // POST: /api/products/get-all
         [HttpPost("get-all")]
-        // [HasPermissionAny("admin:create-product", "admin:edit-product")]
+        //[HasPermissionAny("admin:create-product", "admin:edit-product")]
         // [HasPermissionAll("admin:delete-product", "admin:hard-delete")]
         public async Task<ActionResult<IEnumerable<Product>>> GetAllProducts([FromBody] ProductFilterDto filter)
         {

@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using shop_back.src.Shared.Application.DTOs;
 using shop_back.src.Shared.Application.Services;
+using shop_back.src.Shared.Infrastructure.Services.Authorization;
 using System;
 using System.Threading.Tasks;
 
@@ -19,10 +20,11 @@ namespace shop_back.src.Shared.Api.Controllers
         }
 
         [HttpGet]
+        [HasPermissionAny("read-admin-dashboard")]
         public async Task<IActionResult> Get([FromQuery] string tableId, [FromQuery] Guid userId)
         {
-            Console.WriteLine("tableId: " + tableId);
-            Console.WriteLine("userId: " + userId);
+            // Console.WriteLine("tableId: " + tableId);
+            // Console.WriteLine("userId: " + userId);
             if (string.IsNullOrEmpty(tableId) || userId == Guid.Empty)
                 return BadRequest("Missing tableId or userId");
 
@@ -31,6 +33,7 @@ namespace shop_back.src.Shared.Api.Controllers
         }
 
         [HttpPut]
+        [HasPermissionAny("read-admin-dashboard")]
         public async Task<IActionResult> Put([FromBody] UserTableCombinationDTO dto)
         {
             if (dto.UserId == Guid.Empty || string.IsNullOrEmpty(dto.TableId))
