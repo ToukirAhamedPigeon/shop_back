@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using shop_back.src.Shared.Application.DTOs.UserLogs;
 using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Application.DTOs.Common;
+using shop_back.src.Shared.Infrastructure.Services.Authorization;
 
 namespace shop_back.src.Shared.API.Controllers
 {
@@ -17,6 +18,7 @@ namespace shop_back.src.Shared.API.Controllers
         }
 
         [HttpPost]
+        [HasPermissionAny("read-admin-dashboard")]
         public async Task<IActionResult> GetFiltered([FromBody] UserLogFilterRequest request)
         {
             var result = await _service.GetFilteredLogsAsync(request);
@@ -24,6 +26,7 @@ namespace shop_back.src.Shared.API.Controllers
         }
 
         [HttpGet("{id}")]
+        [HasPermissionAny("read-admin-dashboard")]
         public async Task<IActionResult> Get(Guid id)
         {
             var log = await _service.GetLogAsync(id);
@@ -51,6 +54,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         // 🔹 Collection Name Select
         [HttpPost("collections")]
+        [HasPermissionAny("read-admin-dashboard")]
         public async Task<IActionResult> GetCollections([FromBody] SelectRequestDto? req= null)
         {
             req ??= new SelectRequestDto();
@@ -58,7 +62,9 @@ namespace shop_back.src.Shared.API.Controllers
             return Ok(result);
         }
 
+        // 🔹 Action Type Select
         [HttpPost("action-types")]
+        [HasPermissionAny("read-admin-dashboard")]
         public async Task<IActionResult> GetActionTypes([FromBody] SelectRequestDto? req = null)
         {
             req ??= new SelectRequestDto();
@@ -66,7 +72,9 @@ namespace shop_back.src.Shared.API.Controllers
             return Ok(result);
         }
 
+        // 🔹 Created By Select
         [HttpPost("creators")]
+        [HasPermissionAny("read-admin-dashboard")]
         public async Task<IActionResult> GetCreators([FromBody] SelectRequestDto? req = null)
         {
             req ??= new SelectRequestDto();
