@@ -111,12 +111,21 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             // Sorting
             bool desc = req.SortOrder?.ToLower() == "desc";
 
-            logsQuery = req.SortBy?.ToLower() switch
+           logsQuery = req.SortBy?.ToLower() switch
             {
                 "createdat" => desc ? logsQuery.OrderByDescending(x => x.CreatedAt) : logsQuery.OrderBy(x => x.CreatedAt),
+                "createdbyname" => desc ? logsQuery.OrderByDescending(x => x.CreatedByName) : logsQuery.OrderBy(x => x.CreatedByName), // <- updated
                 "actiontype" => desc ? logsQuery.OrderByDescending(x => x.ActionType) : logsQuery.OrderBy(x => x.ActionType),
+                "changes" => desc ? logsQuery.OrderByDescending(x => x.Changes) : logsQuery.OrderBy(x => x.Changes),
+                "modelname" => desc ? logsQuery.OrderByDescending(x => x.ModelName) : logsQuery.OrderBy(x => x.ModelName),
+                "operatingsystem" => desc ? logsQuery.OrderByDescending(x => x.OperatingSystem) : logsQuery.OrderBy(x => x.OperatingSystem),
+                "browser" => desc ? logsQuery.OrderByDescending(x => x.Browser) : logsQuery.OrderBy(x => x.Browser),
+                "device" => desc ? logsQuery.OrderByDescending(x => x.Device) : logsQuery.OrderBy(x => x.Device),
+                "ipaddress" => desc ? logsQuery.OrderByDescending(x => x.IpAddress) : logsQuery.OrderBy(x => x.IpAddress),
+                "useragent" => desc ? logsQuery.OrderByDescending(x => x.UserAgent) : logsQuery.OrderBy(x => x.UserAgent),
                 _ => logsQuery.OrderByDescending(x => x.CreatedAt)
             };
+
 
             // Pagination
             var logs = await logsQuery
