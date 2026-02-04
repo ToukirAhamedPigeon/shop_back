@@ -113,6 +113,13 @@ namespace shop_back.src.Shared.Infrastructure.Helpers
                 after = filteredAfter
             });
         }
+        public string? GetClientIp()
+        {
+            return _httpContextAccessor.HttpContext?
+                .Connection?
+                .RemoteIpAddress?
+                .ToString();
+        }
     }
 
     public static class UserAgentParser

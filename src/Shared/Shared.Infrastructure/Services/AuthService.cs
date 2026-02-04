@@ -43,7 +43,14 @@ namespace shop_back.src.Shared.Infrastructure.Services
             {
                 return null;
             }
+            // --------------------
+            // Update last login info
+            // --------------------
+            user.LastLoginAt = DateTime.UtcNow;
+            user.LastLoginIp = _userLogHelper.GetClientIp(); // must be nullable-safe
 
+            await _userRepo.UpdateAsync(user);
+            await _userRepo.SaveChangesAsync();
             var accessToken = GenerateJwtToken(user);
 
             var refreshToken = new RefreshToken
@@ -177,6 +184,12 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 claimsList.Add(new Claim("permission", permission));
             }
 
+            if (!string.IsNullOrEmpty(user.Timezone))
+                claimsList.Add(new Claim("timezone", user.Timezone));
+
+            if (!string.IsNullOrEmpty(user.Language))
+                claimsList.Add(new Claim("language", user.Language));
+
             var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", ".env"));
             try { DotNetEnv.Env.Load(envPath); } catch { }
 
@@ -209,6 +222,11 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 Email = user.Email,
                 MobileNo = user.MobileNo ?? string.Empty,
                 IsActive = user.IsActive,
+                ProfileImage = user.ProfileImage,
+                Bio = user.Bio,
+                QRCode = user.QRCode,
+                Timezone = user.Timezone,
+                Language = user.Language,
                 Roles = roles,
                 Permissions = permissions
             };

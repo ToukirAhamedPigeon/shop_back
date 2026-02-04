@@ -28,27 +28,18 @@ namespace shop_back.src.Shared.Application.DTOs.Auth
     public class UserDto
     {
         public Guid Id { get; set; }
-
         public string Username { get; set; } = string.Empty;
-
         public string Email { get; set; } = string.Empty;
-
         public string MobileNo { get; set; } = string.Empty;
-
         public bool IsActive { get; set; }
 
-        /// <summary>
-        /// Role names assigned to this user
-        /// </summary>
+        public string? ProfileImage { get; set; }
+        public string? Bio { get; set; }
+        public string? QRCode { get; set; }
+        public string? Timezone { get; set; }
+        public string? Language { get; set; }
+
         public string[] Roles { get; set; } = Array.Empty<string>();
-
-        /// <summary>
-        /// Permissions assigned to this user (from roles or direct)
-        /// </summary>
         public string[] Permissions { get; set; } = Array.Empty<string>();
-
-        // Optional: expose active status if needed in client
-        // public bool IsActive { get; set; }
-        // public bool IsDeleted { get; set; }
     }
 }
