@@ -16,6 +16,7 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
             services.AddScoped<IPasswordResetService, PasswordResetService>();
             services.AddScoped<IMailService, MailService>();
             services.AddScoped<IUserLogService, UserLogService>();
+            services.AddScoped<IUserService, UserService>();
             services.AddScoped<IUserTableCombinationService, UserTableCombinationService>();
             services.AddScoped<UserLogHelper>();
             services.AddHttpContextAccessor();

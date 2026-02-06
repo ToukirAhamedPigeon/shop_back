@@ -9,6 +9,7 @@ using shop_back.src.Shared.Infrastructure.Helpers;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using shop_back.src.Shared.Application.DTOs.Users;
 
 namespace shop_back.src.Shared.Infrastructure.Services
 {

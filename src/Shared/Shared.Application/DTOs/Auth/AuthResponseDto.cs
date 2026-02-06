@@ -1,3 +1,4 @@
+using shop_back.src.Shared.Application.DTOs.Users;
 namespace shop_back.src.Shared.Application.DTOs.Auth
 {
     /// <summary>
@@ -25,21 +26,22 @@ namespace shop_back.src.Shared.Application.DTOs.Auth
     /// <summary>
     /// Represents a user returned in authentication responses.
     /// </summary>
-    public class UserDto
-    {
-        public Guid Id { get; set; }
-        public string Username { get; set; } = string.Empty;
-        public string Email { get; set; } = string.Empty;
-        public string MobileNo { get; set; } = string.Empty;
-        public bool IsActive { get; set; }
+    // public class UserDto
+    // {
+        
+    //     public Guid Id { get; set; }
+    //     public string Username { get; set; } = string.Empty;
+    //     public string Email { get; set; } = string.Empty;
+    //     public string MobileNo { get; set; } = string.Empty;
+    //     public bool IsActive { get; set; }
 
-        public string? ProfileImage { get; set; }
-        public string? Bio { get; set; }
-        public string? QRCode { get; set; }
-        public string? Timezone { get; set; }
-        public string? Language { get; set; }
+    //     public string? ProfileImage { get; set; }
+    //     public string? Bio { get; set; }
+    //     public string? QRCode { get; set; }
+    //     public string? Timezone { get; set; }
+    //     public string? Language { get; set; }
 
-        public string[] Roles { get; set; } = Array.Empty<string>();
-        public string[] Permissions { get; set; } = Array.Empty<string>();
-    }
+    //     public string[] Roles { get; set; } = Array.Empty<string>();
+    //     public string[] Permissions { get; set; } = Array.Empty<string>();
+    // }
 }
