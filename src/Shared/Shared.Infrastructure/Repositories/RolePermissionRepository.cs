@@ -93,5 +93,22 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
 
             return rolePermissions.Concat(directPermissions).Distinct().ToArray();
         }
+        public async Task<string[]> GetAllRolesAsync()
+        {
+            return await _context.Roles
+                .Where(r => r.IsActive && !r.IsDeleted)
+                .Select(r => r.Name)
+                .Distinct()
+                .ToArrayAsync();
+        }
+
+        public async Task<string[]> GetAllPermissionsAsync()
+        {
+            return await _context.Permissions
+                .Where(r => r.IsActive && !r.IsDeleted)
+                .Select(r => r.Name)
+                .Distinct()
+                .ToArrayAsync();
+        }
     }
 }

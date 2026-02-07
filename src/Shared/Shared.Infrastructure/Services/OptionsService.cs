@@ -10,12 +10,20 @@ namespace shop_back.src.Shared.Infrastructure.Services
     public class OptionsService : IOptionsService
     {
         private readonly IUserLogRepository _userLogRepository;
+        private readonly IUserRepository _userRepository;
+        private readonly IRolePermissionRepository _rolePermissionRepository;
         private readonly IDatabase _cache;
         private readonly TimeSpan _cacheTtl = TimeSpan.FromHours(1);
 
-        public OptionsService(IUserLogRepository userLogRepository, IConnectionMultiplexer redis)
+        public OptionsService(
+            IUserLogRepository userLogRepository, 
+            IUserRepository userRepository, 
+            IRolePermissionRepository rolePermissionRepository,
+            IConnectionMultiplexer redis)
         {
             _userLogRepository = userLogRepository;
+            _userRepository = userRepository;
+            _rolePermissionRepository = rolePermissionRepository;
             _cache = redis.GetDatabase();
         }
 
@@ -27,28 +35,47 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
             // 🔹 Try cache first
             var cached = await _cache.StringGetAsync(cacheKey);
-            if (cached.HasValue){
-                // Console.WriteLine($"[REDIS CACHE HIT] Key: {cacheKey}");
-                return JsonSerializer.Deserialize<List<SelectOptionDto>>(cached!) ?? new List<SelectOptionDto>();
-            }
-            // Console.WriteLine($"[DATABASE FETCH] Cache miss for Key: {cacheKey}");    
-            // Console.WriteLine($"[OPTIONS TYPE] Fetching type: {type}");
-            IEnumerable<SelectOptionDto> result = type.ToLower() switch
+            List<SelectOptionDto> result;
+
+            if (cached.HasValue)
             {
-                "userlogcollections" => await _userLogRepository.GetDistinctModelNamesAsync(req),
-                "userlogactiontypes" => await _userLogRepository.GetDistinctActionTypesAsync(req),
-                "userlogcreators" => await _userLogRepository.GetDistinctCreatorsAsync(req),
+                // Deserialize cached data
+                result = JsonSerializer.Deserialize<List<SelectOptionDto>>(cached!) ?? new List<SelectOptionDto>();
+
+                // 🔹 Normalize labels even for cached items
+                foreach (var item in result)
+                    item.Label = LabelFormatter.ToReadable(item.Label);
+
+                // 🔹 Optionally, refresh cache with normalized labels
+                await _cache.StringSetAsync(cacheKey, JsonSerializer.Serialize(result), _cacheTtl);
+
+                return result;
+            }
+            result = type.ToLower() switch
+            {
+                "userlogcollections" => (await _userLogRepository.GetDistinctModelNamesAsync(req)).ToList(),
+                "userlogactiontypes" => (await _userLogRepository.GetDistinctActionTypesAsync(req)).ToList(),
+                "userlogcreators" => (await _userLogRepository.GetDistinctCreatorsAsync(req)).ToList(),
+                "usercreators" => (await _userRepository.GetDistinctCreatorsAsync(req)).ToList(),
+                "userupdaters" => (await _userRepository.GetDistinctUpdatersAsync(req)).ToList(),
+                "userdatetypes" => (await _userRepository.GetDistinctDateTypesAsync(req)).ToList(),
+                "roles" => (await _rolePermissionRepository.GetAllRolesAsync())
+                            .Select(r => new SelectOptionDto { Value = r, Label = r })
+                            .ToList(),
+
+                "permissions" => (await _rolePermissionRepository.GetAllPermissionsAsync())
+                                  .Select(p => new SelectOptionDto { Value = p, Label = p })
+                                  .ToList(),
                 _ => new List<SelectOptionDto>()
             };
 
             // 🔹 Normalize label
             foreach (var item in result)
+            {
                 item.Label = LabelFormatter.ToReadable(item.Label);
+            }
 
-            // 🔹 Set cache
             await _cache.StringSetAsync(cacheKey, JsonSerializer.Serialize(result), _cacheTtl);
-
-            // Console.WriteLine($"[REDIS CACHE SET] Key cached for {_cacheTtl.TotalMinutes} minutes");
 
             return result;
         }

@@ -3,6 +3,8 @@ using shop_back.src.Shared.Application.Repositories;
 using shop_back.src.Shared.Infrastructure.Data;
 using shop_back.src.Shared.Domain.Entities;
 using shop_back.src.Shared.Application.DTOs.Users;
+using shop_back.src.Shared.Application.DTOs.Common;
+using System.Reflection;
 
 namespace shop_back.src.Shared.Infrastructure.Repositories
 {
@@ -268,6 +270,85 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();
+        }
+        public async Task<IEnumerable<SelectOptionDto>> GetDistinctCreatorsAsync(SelectRequestDto req)
+        {
+            var query = _context.Users
+                .Join(_context.Users,
+                    joinedUser => joinedUser.CreatedBy,
+                    user => user.Id,
+                    (joinedUser, user) => new { joinedUser, user })
+                .AsQueryable();
+
+            if (req.Where != null && req.Where.TryGetValue("CreatedByName", out var createdByNameNode))
+            {
+                var createdByName = createdByNameNode?.ToString() ?? "";
+                if (!string.IsNullOrEmpty(createdByName))
+                    query = query.Where(x => x.user.Name.Contains(createdByName));
+            }
+
+            if (!string.IsNullOrWhiteSpace(req.Search))
+                query = query.Where(x => x.user.Name.Contains(req.Search));
+
+            var result = await query
+                .Select(x => new SelectOptionDto { Value = x.user.Id.ToString(), Label = x.user.Name })
+                .Distinct()
+                .OrderBy(x => x.Label)
+                .Skip(req.Skip)
+                .Take(req.Limit)
+                .ToListAsync();
+
+            return result;
+        }
+
+        public async Task<IEnumerable<SelectOptionDto>> GetDistinctUpdatersAsync(SelectRequestDto req)
+        {
+            var query = _context.Users
+                .Join(_context.Users,
+                    joinedUser => joinedUser.UpdatedBy,
+                    user => user.Id,
+                    (joinedUser, user) => new { joinedUser, user })
+                .AsQueryable();
+
+            if (req.Where != null && req.Where.TryGetValue("CreatedByName", out var createdByNameNode))
+            {
+                var createdByName = createdByNameNode?.ToString() ?? "";
+                if (!string.IsNullOrEmpty(createdByName))
+                    query = query.Where(x => x.user.Name.Contains(createdByName));
+            }
+
+            if (!string.IsNullOrWhiteSpace(req.Search))
+                query = query.Where(x => x.user.Name.Contains(req.Search));
+
+            var result = await query
+                .Select(x => new SelectOptionDto { Value = x.user.Id.ToString(), Label = x.user.Name })
+                .Distinct()
+                .OrderBy(x => x.Label)
+                .Skip(req.Skip)
+                .Take(req.Limit)
+                .ToListAsync();
+
+            return result;
+        }
+        public async Task<IEnumerable<SelectOptionDto>> GetDistinctDateTypesAsync(SelectRequestDto req)
+        {
+            // Get all properties of User that are DateTime or DateTime?
+            var dateProperties = typeof(User)
+                .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p.PropertyType == typeof(DateTime) || p.PropertyType == typeof(DateTime?))
+                .Select(p => new SelectOptionDto
+                {
+                    Value = p.Name, // send property name as value
+                    Label = p.Name  // optionally you can prettify it for frontend
+                })
+                .ToList();
+
+            // Pagination
+            var paged = dateProperties
+                .Skip(req.Skip)
+                .Take(req.Limit);
+
+            return await Task.FromResult(paged);
         }
     }
 }

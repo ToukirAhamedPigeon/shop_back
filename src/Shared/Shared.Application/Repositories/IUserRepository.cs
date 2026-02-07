@@ -1,5 +1,6 @@
 using shop_back.src.Shared.Domain.Entities;
 using shop_back.src.Shared.Application.DTOs.Users;
+using shop_back.src.Shared.Application.DTOs.Common;
 
 namespace shop_back.src.Shared.Application.Repositories
 {
@@ -19,5 +20,8 @@ namespace shop_back.src.Shared.Application.Repositories
         Task AddAsync(User user);
         Task UpdateAsync(User user);
         Task SaveChangesAsync();
+        Task<IEnumerable<SelectOptionDto>> GetDistinctCreatorsAsync(SelectRequestDto req);
+        Task<IEnumerable<SelectOptionDto>> GetDistinctUpdatersAsync(SelectRequestDto req);
+        Task<IEnumerable<SelectOptionDto>> GetDistinctDateTypesAsync(SelectRequestDto req);
     }
 }
