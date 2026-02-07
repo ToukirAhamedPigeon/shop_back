@@ -187,6 +187,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 .Select(x => new SelectOptionDto { Value = x, Label = x })
                 .ToListAsync();
 
+            Console.WriteLine($"ActionTypes: {string.Join(", ", result.Select(x => x.Label))}");
             return result;
         }
 

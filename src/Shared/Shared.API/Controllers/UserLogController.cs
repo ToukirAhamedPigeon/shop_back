@@ -52,34 +52,34 @@ namespace shop_back.src.Shared.API.Controllers
             return Ok(dto);
         }
 
-        // 🔹 Collection Name Select
-        [HttpPost("collections")]
-        [HasPermissionAny("read-admin-dashboard")]
-        public async Task<IActionResult> GetCollections([FromBody] SelectRequestDto? req= null)
-        {
-            req ??= new SelectRequestDto();
-            var result = await _service.GetCollectionsAsync(req);
-            return Ok(result);
-        }
+        // // 🔹 Collection Name Select
+        // [HttpPost("collections")]
+        // [HasPermissionAny("read-admin-dashboard")]
+        // public async Task<IActionResult> GetCollections([FromBody] SelectRequestDto? req= null)
+        // {
+        //     req ??= new SelectRequestDto();
+        //     var result = await _service.GetCollectionsAsync(req);
+        //     return Ok(result);
+        // }
 
-        // 🔹 Action Type Select
-        [HttpPost("action-types")]
-        [HasPermissionAny("read-admin-dashboard")]
-        public async Task<IActionResult> GetActionTypes([FromBody] SelectRequestDto? req = null)
-        {
-            req ??= new SelectRequestDto();
-            var result = await _service.GetActionTypesAsync(req);
-            return Ok(result);
-        }
+        // // 🔹 Action Type Select
+        // [HttpPost("action-types")]
+        // [HasPermissionAny("read-admin-dashboard")]
+        // public async Task<IActionResult> GetActionTypes([FromBody] SelectRequestDto? req = null)
+        // {
+        //     req ??= new SelectRequestDto();
+        //     var result = await _service.GetActionTypesAsync(req);
+        //     return Ok(result);
+        // }
 
-        // 🔹 Created By Select
-        [HttpPost("creators")]
-        [HasPermissionAny("read-admin-dashboard")]
-        public async Task<IActionResult> GetCreators([FromBody] SelectRequestDto? req = null)
-        {
-            req ??= new SelectRequestDto();
-            var result = await _service.GetCreatorsAsync(req);
-            return Ok(result);
-        }
+        // // 🔹 Created By Select
+        // [HttpPost("creators")]
+        // [HasPermissionAny("read-admin-dashboard")]
+        // public async Task<IActionResult> GetCreators([FromBody] SelectRequestDto? req = null)
+        // {
+        //     req ??= new SelectRequestDto();
+        //     var result = await _service.GetCreatorsAsync(req);
+        //     return Ok(result);
+        // }
     }
 }

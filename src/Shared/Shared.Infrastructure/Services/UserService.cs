@@ -17,14 +17,15 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         public async Task<object> GetUsersAsync(UserFilterRequest request)
         {
-            var (users, total) = await _repo.GetFilteredAsync(request);
+            var (users, totalCount, grandTotalCount, pageIndex, pageSize) = await _repo.GetFilteredAsync(request);
 
             return new
             {
                 users,
-                totalCount = total,
-                pageIndex = request.Page - 1,
-                pageSize = request.Limit
+                totalCount,
+                grandTotalCount,
+                pageIndex,
+                pageSize
             };
         }
 
