@@ -27,9 +27,12 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
             // 🔹 Try cache first
             var cached = await _cache.StringGetAsync(cacheKey);
-            if (cached.HasValue)
+            if (cached.HasValue){
+                // Console.WriteLine($"[REDIS CACHE HIT] Key: {cacheKey}");
                 return JsonSerializer.Deserialize<List<SelectOptionDto>>(cached!) ?? new List<SelectOptionDto>();
-
+            }
+            // Console.WriteLine($"[DATABASE FETCH] Cache miss for Key: {cacheKey}");    
+            // Console.WriteLine($"[OPTIONS TYPE] Fetching type: {type}");
             IEnumerable<SelectOptionDto> result = type.ToLower() switch
             {
                 "userlogcollections" => await _userLogRepository.GetDistinctModelNamesAsync(req),
@@ -44,6 +47,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
             // 🔹 Set cache
             await _cache.StringSetAsync(cacheKey, JsonSerializer.Serialize(result), _cacheTtl);
+
+            // Console.WriteLine($"[REDIS CACHE SET] Key cached for {_cacheTtl.TotalMinutes} minutes");
 
             return result;
         }
