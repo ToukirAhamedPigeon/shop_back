@@ -9,10 +9,12 @@ namespace shop_back.src.Shared.Application.Services
     public class MailService : IMailService
     {
         private readonly IMailRepository _mailRepository;
+        private readonly IMailVerificationRepository _mailVerificationRepository;
 
-        public MailService(IMailRepository mailRepository)
+        public MailService(IMailRepository mailRepository, IMailVerificationRepository mailVerificationRepository)
         {
             _mailRepository = mailRepository;
+            _mailVerificationRepository = mailVerificationRepository;
         }
 
         public async Task SendEmailAsync(Mail mail)
@@ -83,7 +85,53 @@ namespace shop_back.src.Shared.Application.Services
             return await _mailRepository.GetAllAsync();
         }
 
-         public string BuildEmailTemplate(string bodyContent, string subject = "Notification")
+        public async Task SendVerificationEmail(string toEmail, Guid userId, string? verificationToken = null)
+        {
+            // 🔹 Generate a token if not provided
+            if (string.IsNullOrEmpty(verificationToken))
+            {
+                verificationToken = Guid.NewGuid().ToString(); // simple GUID token
+            }
+
+            // 🔹 Save token in DB or a temporary table for verification
+            var mailVerification = new MailVerification
+            {
+                UserId = userId,
+                Token = verificationToken,
+                ExpiresAt = DateTime.UtcNow.AddHours(24), // valid for 24 hours
+                IsUsed = false
+            };
+            // Save token to DB (assume _mailVerificationRepository or a separate repo)
+            await _mailVerificationRepository.AddAsync(mailVerification);
+            await _mailVerificationRepository.SaveChangesAsync();
+
+            // 🔹 Build verification link
+            var envBaseUrl = Env.GetString("BASE_URL") ?? "http://localhost:5000";
+            var verifyLink = $"{envBaseUrl}/verify-email?token={verificationToken}";
+
+            // 🔹 Email body
+            var bodyContent = $@"
+                <p>Hi,</p>
+                <p>Thank you for registering. Please verify your email by clicking the button below:</p>
+                <a href='{verifyLink}' class='button'>Verify Email</a>
+                <p>If you did not request this, please ignore this email.</p>
+            ";
+
+            var htmlBody = BuildEmailTemplate(bodyContent, "Verify Your Email");
+
+            // 🔹 Send the email
+            var mail = new Mail
+            {
+                FromMail = Env.GetString("COMPANY_EMAIL") ?? "no-reply@company.com",
+                ToMail = toEmail,
+                Subject = "Verify Your Email",
+                Body = htmlBody
+            };
+
+            await SendEmailAsync(mail);
+        }
+
+        public string BuildEmailTemplate(string bodyContent, string subject = "Notification")
         {
             // Load ENV
             var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", ".env"));

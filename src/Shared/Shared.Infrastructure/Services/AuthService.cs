@@ -175,6 +175,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
             var claimsList = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+                new Claim("UserId", user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.UniqueName, user.Username ?? string.Empty),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
                 new Claim("mobile_no", user.MobileNo ?? string.Empty)
@@ -187,6 +188,9 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
             if (!string.IsNullOrEmpty(user.Timezone))
                 claimsList.Add(new Claim("timezone", user.Timezone));
+
+            if (!string.IsNullOrEmpty(user.NID))
+                claimsList.Add(new Claim("nid", user.NID));
 
             if (!string.IsNullOrEmpty(user.Language))
                 claimsList.Add(new Claim("language", user.Language));
@@ -230,7 +234,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 Language = user.Language,
                 Roles = roles,
                 Permissions = permissions
-            };
+            }; 
         }
     }
 }

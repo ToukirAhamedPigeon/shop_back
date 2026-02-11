@@ -20,6 +20,30 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             _rolePermissionRepo = rolePermissionRepo;
         }
 
+        public async Task<bool> ExistsByUsernameAsync(string username)
+        {
+            return await _context.Users
+                .AnyAsync(u => !u.IsDeleted && u.Username == username);
+        }
+
+        public async Task<bool> ExistsByEmailAsync(string email)
+        {
+            return await _context.Users
+                .AnyAsync(u => !u.IsDeleted && u.Email == email);
+        }
+
+        public async Task<bool> ExistsByMobileNoAsync(string mobileNo)
+        {
+            return await _context.Users
+                .AnyAsync(u => !u.IsDeleted && u.MobileNo == mobileNo);
+        }
+
+        public async Task<bool> ExistsByNIDAsync(string nid)
+        {
+            return await _context.Users
+                .AnyAsync(u => !u.IsDeleted && u.NID == nid);
+        }
+
         public async Task<User?> GetByIdentifierAsync(string identifier)
         {
             // ✅ Correction:
@@ -256,7 +280,8 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 "gender" => desc ? baseQuery.OrderByDescending(x => x.Gender) : baseQuery.OrderBy(x => x.Gender),
                 "address" => desc ? baseQuery.OrderByDescending(x => x.Address) : baseQuery.OrderBy(x => x.Address),
                 "timezone" => desc ? baseQuery.OrderByDescending(x => x.Timezone) : baseQuery.OrderBy(x => x.Timezone),
-                "language" => desc ? baseQuery.OrderByDescending(x => x.Language) : baseQuery.OrderBy(x => x.Language),
+                "nid" => desc ? baseQuery.OrderByDescending(x => x.NID) : baseQuery.OrderBy(x => x.NID),
+                "language" => desc ? baseQuery.OrderByDescending(x => x.NID) : baseQuery.OrderBy(x => x.NID),   
 
                 // 🔢 Boolean
                 "isactive" => desc ? baseQuery.OrderByDescending(x => x.IsActive) : baseQuery.OrderBy(x => x.IsActive),
@@ -355,6 +380,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     Address = user.Address,
                     QRCode = user.QRCode,
                     Timezone = user.Timezone,
+                    NID = user.NID,
                     Language = user.Language,
                     IsActive = user.IsActive,
                     CreatedAt = user.CreatedAt,

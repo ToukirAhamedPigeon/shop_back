@@ -23,10 +23,17 @@ namespace shop_back.src.Shared.Infrastructure.Data
         public DbSet<TranslationKey> TranslationKeys { get; set; } = null!;
         public DbSet<TranslationValue> TranslationValues { get; set; } = null!;
         public DbSet<Mail> Mails { get; set; } = null!;
+        public DbSet<MailVerification> MailVerifications { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+             modelBuilder.Entity<MailVerification>()
+                .HasOne(mv => mv.User)
+                .WithMany()
+                .HasForeignKey(mv => mv.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             foreach (var entityType in modelBuilder.Model.GetEntityTypes())
             {

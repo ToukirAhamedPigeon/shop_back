@@ -15,10 +15,12 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
             services.AddScoped<ITranslationService, TranslationService>();
             services.AddScoped<IPasswordResetService, PasswordResetService>();
             services.AddScoped<IMailService, MailService>();
+            services.AddScoped<IMailVerificationService, MailVerificationService>();
             services.AddScoped<IUserLogService, UserLogService>();
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IOptionsService, OptionsService>();
             services.AddScoped<IUserTableCombinationService, UserTableCombinationService>();
+            services.AddScoped<IUniqueCheckService, UniqueCheckService>();
             services.AddScoped<UserLogHelper>();
             services.AddHttpContextAccessor();
 

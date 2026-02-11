@@ -6,6 +6,10 @@ namespace shop_back.src.Shared.Application.Repositories
 {
     public interface IUserRepository
     {
+        Task<bool> ExistsByUsernameAsync(string username);
+        Task<bool> ExistsByEmailAsync(string email);
+        Task<bool> ExistsByMobileNoAsync(string mobileNo);
+        Task<bool> ExistsByNIDAsync(string nid);
         Task<User?> GetByIdentifierAsync(string identifier); // renamed for clarity
         Task<User?> GetByEmailAsync(string email);
         Task<User?> GetByMobileNoAsync(string mobileNo);

@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using shop_back.src.Shared.Application.Repositories;
 using shop_back.src.Shared.Infrastructure.Data;
-using shop_back.src.Shared.Domain;
+using shop_back.src.Shared.Domain.Entities;
 
 namespace shop_back.src.Shared.Infrastructure.Repositories
 {
@@ -110,5 +110,63 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 .Distinct()
                 .ToArrayAsync();
         }
+
+        // Assign Roles to a User
+        public async Task AssignRolesAsync(Guid userId, string[] roles)
+        {
+            // Remove old roles
+            var existingRoles = _context.ModelRoles.Where(mr => mr.ModelId == userId && mr.ModelName == "User");
+            _context.ModelRoles.RemoveRange(existingRoles);
+
+            // Get role Ids from role names
+            var roleEntities = await _context.Roles
+                .Where(r => roles.Contains(r.Name) && r.IsActive && !r.IsDeleted)
+                .ToListAsync();
+
+            // Add new roles
+            foreach (var role in roleEntities)
+            {
+                _context.ModelRoles.Add(new ModelRole
+                {
+                    Id = Guid.NewGuid(),
+                    ModelId = userId,
+                    ModelName = "User",
+                    RoleId = role.Id,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        // Assign Permissions to a User (directly)
+        public async Task AssignPermissionsAsync(Guid userId, string[] permissions)
+        {
+            // Remove old direct permissions
+            var existingPermissions = _context.ModelPermissions
+                .Where(mp => mp.ModelId == userId && mp.ModelName == "User");
+            _context.ModelPermissions.RemoveRange(existingPermissions);
+
+            // Get permission Ids from permission names
+            var permissionEntities = await _context.Permissions
+                .Where(p => permissions.Contains(p.Name) && p.IsActive && !p.IsDeleted)
+                .ToListAsync();
+
+            // Add new permissions
+            foreach (var permission in permissionEntities)
+            {
+                _context.ModelPermissions.Add(new ModelPermission
+                {
+                    Id = Guid.NewGuid(),
+                    ModelId = userId,
+                    ModelName = "User",
+                    PermissionId = permission.Id,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
     }
 }

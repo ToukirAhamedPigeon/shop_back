@@ -47,6 +47,7 @@ namespace shop_back.src.Shared.Infrastructure.Middlewares
                 path.StartsWithSegments("/api/csrf/token") ||
                 path.StartsWithSegments("/api/translations/get") ||
                 path.StartsWithSegments("/swagger") ||
+                path.StartsWithSegments("/uploads") ||
                 path.StartsWithSegments("/api/auth/login") ||
                 path.StartsWithSegments("/api/auth/password-reset") ||
                 path.StartsWithSegments("/api/auth/refresh");

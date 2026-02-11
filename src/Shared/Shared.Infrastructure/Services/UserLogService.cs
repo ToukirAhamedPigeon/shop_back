@@ -99,23 +99,5 @@ namespace shop_back.src.Shared.Infrastructure.Services
             await _cache.StringSetAsync(cacheKey, JsonSerializer.Serialize(result), _cacheTtl);
             return result;
         }
-
-        // public Task<IEnumerable<SelectOptionDto>> GetCollectionsAsync(SelectRequestDto req)
-        // {
-        //     var cacheKey = "UserLog:Collections";
-        //     return GetOrSetCacheAsync(cacheKey, () => _repository.GetDistinctModelNamesAsync(req));
-        // }
-
-        // public Task<IEnumerable<SelectOptionDto>> GetActionTypesAsync(SelectRequestDto req)
-        // {
-        //     var cacheKey = "UserLog:ActionTypes";
-        //     return GetOrSetCacheAsync(cacheKey, () => _repository.GetDistinctActionTypesAsync(req));
-        // }
-
-        // public Task<IEnumerable<SelectOptionDto>> GetCreatorsAsync(SelectRequestDto req)
-        // {
-        //     var cacheKey = "UserLog:Creators";
-        //     return GetOrSetCacheAsync(cacheKey, () => _repository.GetDistinctCreatorsAsync(req));
-        // }
     }
 }

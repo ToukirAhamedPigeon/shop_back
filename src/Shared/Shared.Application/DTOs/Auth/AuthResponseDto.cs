@@ -39,6 +39,7 @@ namespace shop_back.src.Shared.Application.DTOs.Auth
     //     public string? Bio { get; set; }
     //     public string? QRCode { get; set; }
     //     public string? Timezone { get; set; }
+    //     public string? NID { get; set; }
     //     public string? Language { get; set; }
 
     //     public string[] Roles { get; set; } = Array.Empty<string>();

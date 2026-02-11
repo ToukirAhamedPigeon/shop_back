@@ -91,6 +91,9 @@ namespace shop_back.src.Shared.Domain.Entities
         [Column("language")]
         public string? Language { get; set; }
 
+        [Column("nid")]
+        public string? NID { get; set; }
+
         // --------------------
         // System Flags
         // --------------------

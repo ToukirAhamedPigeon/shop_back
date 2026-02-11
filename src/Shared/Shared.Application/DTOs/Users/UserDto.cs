@@ -22,6 +22,8 @@ namespace shop_back.src.Shared.Application.DTOs.Users
 
         // Preferences
         public string? Timezone { get; set; }
+        
+        public string? NID { get; set; }
         public string? Language { get; set; }
 
         // Status
