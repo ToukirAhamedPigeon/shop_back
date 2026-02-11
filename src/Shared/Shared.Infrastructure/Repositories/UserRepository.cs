@@ -65,9 +65,13 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             int PageSize
         )> GetFilteredAsync(UserFilterRequest req)
         {
-            var baseQuery = _context.Users
-                .Where(u => !u.IsDeleted)
-                .AsQueryable();
+            var baseQuery = _context.Users.AsQueryable();
+
+            // IsDeleted filter (default false)
+            if (req.IsDeleted.HasValue)
+                baseQuery = baseQuery.Where(u => u.IsDeleted == req.IsDeleted.Value);
+            else
+                baseQuery = baseQuery.Where(u => !u.IsDeleted);
 
             // 🔍 Search (User fields + Roles + Permissions)
             if (!string.IsNullOrWhiteSpace(req.Q))
@@ -120,6 +124,119 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             // 🔘 Active filter
             if (req.IsActive.HasValue)
                 baseQuery = baseQuery.Where(u => u.IsActive == req.IsActive.Value);
+
+            if (req.Gender != null && req.Gender.Any())
+            {
+                baseQuery = baseQuery.Where(u =>
+                    req.Gender.Contains(u.Gender ?? "")
+                );
+            }
+
+            if (req.CreatedBy != null && req.CreatedBy.Any())
+            {
+                baseQuery = baseQuery.Where(u =>
+                    u.CreatedBy.HasValue &&
+                    req.CreatedBy.Contains(u.CreatedBy.Value)
+                );
+            }
+
+            if (req.UpdatedBy != null && req.UpdatedBy.Any())
+            {
+                baseQuery = baseQuery.Where(u =>
+                    u.UpdatedBy.HasValue &&
+                    req.UpdatedBy.Contains(u.UpdatedBy.Value)
+                );
+            }
+            if (req.Roles != null && req.Roles.Any())
+            {
+                baseQuery = baseQuery.Where(u =>
+                    _context.ModelRoles.Any(mr =>
+                        mr.ModelId == u.Id &&
+                        mr.ModelName == "User" &&
+                        _context.Roles.Any(r =>
+                            r.Id == mr.RoleId &&
+                            req.Roles.Contains(r.Name)
+                        )
+                    )
+                );
+            }
+            if (req.Permissions != null && req.Permissions.Any())
+            {
+                baseQuery = baseQuery.Where(u =>
+                    // Direct user permissions
+                    _context.ModelPermissions.Any(mp =>
+                        mp.ModelId == u.Id &&
+                        mp.ModelName == "User" &&
+                        _context.Permissions.Any(p =>
+                            p.Id == mp.PermissionId &&
+                            req.Permissions.Contains(p.Name)
+                        )
+                    )
+                    ||
+                    // Role based permissions
+                    _context.RolePermissions.Any(rp =>
+                        _context.ModelRoles.Any(mr =>
+                            mr.ModelId == u.Id &&
+                            mr.ModelName == "User" &&
+                            mr.RoleId == rp.RoleId
+                        ) &&
+                        _context.Permissions.Any(p =>
+                            p.Id == rp.PermissionId &&
+                            req.Permissions.Contains(p.Name)
+                        )
+                    )
+                );
+            }
+            if (
+                req.DateType != null &&
+                req.DateType.Any() &&
+                (req.From.HasValue || req.To.HasValue)
+            )
+            {
+                var from = req.From?.Date ?? DateTime.MinValue;
+                var to = (req.To?.Date ?? req.From?.Date ?? DateTime.MaxValue)
+                            .AddDays(1)
+                            .AddTicks(-1);
+
+                foreach (var col in req.DateType)
+                {
+                    baseQuery = col.ToLower() switch
+                    {
+                        "createdat" =>
+                            baseQuery.Where(u => u.CreatedAt >= from && u.CreatedAt <= to),
+
+                        "updatedat" =>
+                            baseQuery.Where(u => u.UpdatedAt >= from && u.UpdatedAt <= to),
+
+                        "dateofbirth" =>
+                            baseQuery.Where(u =>
+                                u.DateOfBirth.HasValue &&
+                                u.DateOfBirth.Value >= from &&
+                                u.DateOfBirth.Value <= to
+                            ),
+                        "emailverifiedat" =>
+                            baseQuery.Where(u =>
+                                u.EmailVerifiedAt.HasValue &&
+                                u.EmailVerifiedAt.Value >= from &&
+                                u.EmailVerifiedAt.Value <= to
+                            ),
+                        "lastloginat" =>
+                            baseQuery.Where(u =>
+                                u.LastLoginAt.HasValue &&
+                                u.LastLoginAt.Value >= from &&
+                                u.LastLoginAt.Value <= to
+                            ),
+                        "deletedat" =>
+                            baseQuery.Where(u =>
+                                u.DeletedAt.HasValue &&
+                                u.DeletedAt.Value >= from &&
+                                u.DeletedAt.Value <= to
+                            ),
+
+                        _ => baseQuery
+                    };
+                }
+            }
 
             // 📊 Counts (before pagination)
             int totalCount = await baseQuery.CountAsync();
