@@ -22,7 +22,7 @@ namespace shop_back.src.Shared.Application.DTOs.Users
 
         // Preferences
         public string? Timezone { get; set; }
-        
+
         public string? NID { get; set; }
         public string? Language { get; set; }
 
@@ -32,6 +32,8 @@ namespace shop_back.src.Shared.Application.DTOs.Users
         // Audit
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
+        public string? CreatedByName { get; set; }
+        public string? UpdatedByName { get; set; }
 
         public string[] Roles { get; set; } = Array.Empty<string>();
         public string[] Permissions { get; set; } = Array.Empty<string>();

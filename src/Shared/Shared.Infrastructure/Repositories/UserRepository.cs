@@ -385,6 +385,12 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     IsActive = user.IsActive,
                     CreatedAt = user.CreatedAt,
                     UpdatedAt = user.UpdatedAt,
+                    CreatedByName = user.CreatedBy.HasValue
+                        ? _context.Users.FirstOrDefault(u => u.Id == user.CreatedBy.Value)?.Name
+                        : null,
+                    UpdatedByName = user.UpdatedBy.HasValue
+                        ? _context.Users.FirstOrDefault(u => u.Id == user.UpdatedBy.Value)?.Name
+                        : null,
                     Roles = roles,
                     Permissions = permissions
                 });
