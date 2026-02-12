@@ -86,6 +86,7 @@ namespace shop_back.src.Shared.Application.Services
 
         public async Task<(bool Success, string Message)> ResendVerificationAsync(Guid userId)
         {
+            Console.WriteLine(userId);
             var existing = await _repo.GetLatestByUserIdAsync(userId);
 
             if (existing != null && !existing.IsUsed && existing.ExpiresAt > DateTime.UtcNow)

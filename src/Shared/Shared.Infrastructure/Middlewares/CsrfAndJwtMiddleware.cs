@@ -50,6 +50,7 @@ namespace shop_back.src.Shared.Infrastructure.Middlewares
                 path.StartsWithSegments("/uploads") ||
                 path.StartsWithSegments("/api/auth/login") ||
                 path.StartsWithSegments("/api/auth/password-reset") ||
+                path.StartsWithSegments("/api/users/verify-email") ||
                 path.StartsWithSegments("/api/auth/refresh");
 
             // Return 401 if JWT missing for protected endpoints

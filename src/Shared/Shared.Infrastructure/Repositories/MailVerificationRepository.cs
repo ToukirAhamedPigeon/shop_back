@@ -35,9 +35,32 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
 
         public async Task<MailVerification?> GetLatestByUserIdAsync(Guid userId)
         {
-            return await _context.MailVerifications
+            // 1️⃣ Try to get latest verification record
+            var verification = await _context.MailVerifications
+                .Where(mv => mv.UserId == userId)
                 .OrderByDescending(mv => mv.CreatedAt)
-                .FirstOrDefaultAsync(mv => mv.UserId == userId);
+                .Include(mv => mv.User)
+                .FirstOrDefaultAsync();
+
+            if (verification != null)
+                return verification;
+
+            // 2️⃣ If not found in MailVerification, check User table
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.Id == userId);
+
+            if (user == null)
+                return null;
+
+            // 3️⃣ Return empty MailVerification object with User populated
+            return new MailVerification
+            {
+                UserId = user.Id,
+                User = user,
+                IsUsed = false,
+                ExpiresAt = DateTime.MinValue
+            };
         }
+
     }
 }
