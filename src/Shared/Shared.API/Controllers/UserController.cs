@@ -70,5 +70,21 @@ namespace shop_back.src.Shared.API.Controllers
 
             return Ok(result.Message);
         }
+
+        [Authorize]
+        [HasPermissionAny("read-admin-dashboard")]
+        [HttpPost("{id}/regenerate-qr")]
+        public async Task<IActionResult> RegenerateQr(Guid id)
+        {
+            var currentUserId = User?.FindFirst("UserId")?.Value 
+                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+
+            var user = await _service.RegenerateQrAsync(id, currentUserId);
+
+            if (user == null) return NotFound();
+
+            return Ok(user);
+        }
+
     }
 }

@@ -261,5 +261,23 @@ namespace shop_back.src.Shared.Infrastructure.Services
             var random = Path.GetRandomFileName().Replace(".", "").Substring(0, 4); // short random string
             return $"{userId:N}-{timestamp}-{random}";
         }
+
+        public async Task<UserDto?> RegenerateQrAsync(Guid id, string? currentUserId)
+        {
+            var user = await _repo.GetByIdAsync(id);
+            if (user == null) return null;
+
+            user.QRCode = GenerateQRCodeString(user.Id);
+            user.UpdatedAt = DateTime.UtcNow;
+
+            if (!string.IsNullOrEmpty(currentUserId) && Guid.TryParse(currentUserId, out var parsed))
+                user.UpdatedBy = parsed;
+
+            await _repo.SaveChangesAsync();
+
+            // Return fresh DTO
+            return await GetUserAsync(id);
+        }
+
     }
 }

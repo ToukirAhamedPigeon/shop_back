@@ -7,5 +7,7 @@ namespace shop_back.src.Shared.Application.Services
         Task<object> GetUsersAsync(UserFilterRequest request);
         Task<UserDto?> GetUserAsync(Guid id);
         Task<(bool Success, string Message)> CreateUserAsync(CreateUserRequest request, string? createdBy);
+        Task<UserDto?> RegenerateQrAsync(Guid id, string? currentUserId);
+
     }
 }
