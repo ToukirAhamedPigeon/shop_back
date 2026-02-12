@@ -44,6 +44,15 @@ namespace shop_back.src.Shared.Infrastructure.Services
             {
                 return null;
             }
+            if (user.EmailVerifiedAt == null)
+            {
+                throw new Exception("EMAIL_NOT_VERIFIED");
+            }
+
+            if (!user.IsActive)
+            {
+                throw new Exception("USER_INACTIVE");
+            }
             // --------------------
             // Update last login info
             // --------------------
@@ -225,6 +234,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 Id = user.Id,
                 Username = user.Username,
                 Email = user.Email,
+                EmailVerifiedAt = user.EmailVerifiedAt,
                 MobileNo = user.MobileNo ?? string.Empty,
                 IsActive = user.IsActive,
                 ProfileImage = user.ProfileImage,

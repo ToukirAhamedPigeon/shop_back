@@ -83,5 +83,28 @@ namespace shop_back.src.Shared.Application.Services
 
             return (true, "Email verified successfully!");
         }
+
+        public async Task<(bool Success, string Message)> ResendVerificationAsync(Guid userId)
+        {
+            var existing = await _repo.GetLatestByUserIdAsync(userId);
+
+            if (existing != null && !existing.IsUsed && existing.ExpiresAt > DateTime.UtcNow)
+            {
+                return (false, "Previous verification email is still valid.");
+            }
+
+            var user = existing?.User;
+
+            if (user == null)
+                return (false, "User not found.");
+
+            if (user.EmailVerifiedAt != null)
+                return (false, "Email already verified.");
+
+            await SendVerificationEmailAsync(user);
+
+            return (true, "Verification email sent successfully.");
+        }
+
     }
 }

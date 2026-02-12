@@ -1,4 +1,5 @@
 // src/Modules/UserTable/Api/Controllers/UserTableCombinationController.cs
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using shop_back.src.Shared.Application.DTOs;
 using shop_back.src.Shared.Application.Services;
@@ -19,6 +20,7 @@ namespace shop_back.src.Shared.Api.Controllers
             _service = service;
         }
 
+        [Authorize]
         [HttpGet]
         [HasPermissionAny("read-admin-dashboard")]
         public async Task<IActionResult> Get([FromQuery] string tableId, [FromQuery] Guid userId)
@@ -32,6 +34,7 @@ namespace shop_back.src.Shared.Api.Controllers
             return Ok(new { showColumnCombinations = result.ShowColumnCombinations });
         }
 
+        [Authorize]
         [HttpPut]
         [HasPermissionAny("read-admin-dashboard")]
         public async Task<IActionResult> Put([FromBody] UserTableCombinationDTO dto)

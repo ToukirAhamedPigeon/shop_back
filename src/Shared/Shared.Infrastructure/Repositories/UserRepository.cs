@@ -372,6 +372,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     Name = user.Name,
                     Username = user.Username,
                     Email = user.Email,
+                    EmailVerifiedAt = user.EmailVerifiedAt,
                     MobileNo = user.MobileNo,
                     ProfileImage = user.ProfileImage,
                     Bio = user.Bio,

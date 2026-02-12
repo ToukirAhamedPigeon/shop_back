@@ -9,5 +9,6 @@ namespace shop_back.src.Shared.Application.Repositories
         Task<MailVerification?> GetByTokenAsync(string token);
         Task AddAsync(MailVerification entity);
         Task SaveChangesAsync();
+        Task<MailVerification?> GetLatestByUserIdAsync(Guid userId);
     }
 }

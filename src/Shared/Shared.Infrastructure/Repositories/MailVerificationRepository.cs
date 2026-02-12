@@ -32,5 +32,12 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
         {
             await _context.SaveChangesAsync();
         }
+
+        public async Task<MailVerification?> GetLatestByUserIdAsync(Guid userId)
+        {
+            return await _context.MailVerifications
+                .OrderByDescending(mv => mv.CreatedAt)
+                .FirstOrDefaultAsync(mv => mv.UserId == userId);
+        }
     }
 }

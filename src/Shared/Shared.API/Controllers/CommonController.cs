@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using shop_back.src.Shared.Application.DTOs.Common;
 using shop_back.src.Shared.Application.Services;
@@ -16,6 +17,10 @@ namespace shop_back.src.Shared.API.Controllers
             _service = service;
         }
 
+        /// <summary>
+        /// Check if a value is unique in a specified field.
+        /// </summary>
+        [Authorize]
         [HttpPost("check-unique")]
         [HasPermissionAny("read-admin-dashboard")]
         public async Task<IActionResult> CheckUnique([FromBody] CheckUniqueRequest request)

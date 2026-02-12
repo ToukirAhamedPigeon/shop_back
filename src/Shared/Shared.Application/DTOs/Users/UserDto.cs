@@ -8,6 +8,7 @@ namespace shop_back.src.Shared.Application.DTOs.Users
         public string Name { get; set; } = string.Empty;
         public string Username { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
+        public DateTime? EmailVerifiedAt { get; set; }
         public string? MobileNo { get; set; }
 
         // Profile

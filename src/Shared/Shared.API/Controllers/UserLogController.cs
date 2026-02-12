@@ -3,6 +3,7 @@ using shop_back.src.Shared.Application.DTOs.UserLogs;
 using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Application.DTOs.Common;
 using shop_back.src.Shared.Infrastructure.Services.Authorization;
+using Microsoft.AspNetCore.Authorization;
 
 namespace shop_back.src.Shared.API.Controllers
 {
@@ -17,6 +18,7 @@ namespace shop_back.src.Shared.API.Controllers
             _service = service;
         }
 
+        [Authorize]
         [HttpPost]
         [HasPermissionAny("read-admin-dashboard")]
         public async Task<IActionResult> GetFiltered([FromBody] UserLogFilterRequest request)
@@ -25,6 +27,7 @@ namespace shop_back.src.Shared.API.Controllers
             return Ok(result);
         }
 
+        [Authorize]
         [HttpGet("{id}")]
         [HasPermissionAny("read-admin-dashboard")]
         public async Task<IActionResult> Get(Guid id)

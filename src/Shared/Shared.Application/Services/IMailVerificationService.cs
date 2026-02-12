@@ -6,5 +6,6 @@ namespace shop_back.src.Shared.Application.Services
     {
         Task SendVerificationEmailAsync(User user);
         Task<(bool Success, string Message)> VerifyTokenAsync(string token);
+        Task<(bool Success, string Message)> ResendVerificationAsync(Guid userId);
     }
 }

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using shop_back.src.Shared.Application.DTOs.Common;
 using shop_back.src.Shared.Application.Services;
@@ -20,6 +21,7 @@ namespace shop_back.src.Shared.API.Controllers
         /// Generic select options endpoint.
         /// Example: type = "collections" | "actionTypes" | "creators"
         /// </summary>
+        [Authorize]
         [HttpPost("{type}")]
         [HasPermissionAny("read-admin-dashboard")]
         public async Task<IActionResult> GetOptions(string type, [FromBody] SelectRequestDto? req = null)

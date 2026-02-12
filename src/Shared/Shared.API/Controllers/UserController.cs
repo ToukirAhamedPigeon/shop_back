@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using shop_back.src.Shared.Application.DTOs.Users;
 using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Infrastructure.Services.Authorization;
+using Microsoft.AspNetCore.Authorization;
 
 namespace shop_back.src.Shared.API.Controllers
 {
@@ -19,6 +20,7 @@ namespace shop_back.src.Shared.API.Controllers
             _mailVerificationService = mailVerificationService;
         }
 
+        [Authorize]
         [HttpPost]
         [HasPermissionAny("read-admin-dashboard")]
         public async Task<IActionResult> GetUsers([FromBody] UserFilterRequest request)
@@ -27,6 +29,7 @@ namespace shop_back.src.Shared.API.Controllers
             return Ok(result);
         }
 
+        [Authorize]
         [HttpGet("{id}")]
         [HasPermissionAny("read-admin-dashboard")]
         public async Task<IActionResult> GetUser(Guid id)
@@ -37,6 +40,7 @@ namespace shop_back.src.Shared.API.Controllers
             return Ok(user);
         }
 
+        [Authorize]
         [HttpPost("create")]
         [HasPermissionAny("read-admin-dashboard")]
         public async Task<IActionResult> Create([FromForm] CreateUserRequest request)
@@ -51,6 +55,18 @@ namespace shop_back.src.Shared.API.Controllers
         {
             var result = await _mailVerificationService.VerifyTokenAsync(token);
             if (!result.Success) return BadRequest(result.Message);
+
+            return Ok(result.Message);
+        }
+        [Authorize]
+        [HasPermissionAny("read-admin-dashboard")]
+        [HttpPost("{id}/resend-verification")]
+        public async Task<IActionResult> ResendVerification(Guid id)
+        {
+            var result = await _mailVerificationService.ResendVerificationAsync(id);
+
+            if (!result.Success)
+                return BadRequest(result.Message);
 
             return Ok(result.Message);
         }

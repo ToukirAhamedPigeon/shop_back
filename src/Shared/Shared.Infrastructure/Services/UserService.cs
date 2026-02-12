@@ -67,6 +67,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 Name = user.Name,
                 Username = user.Username,
                 Email = user.Email,
+                EmailVerifiedAt = user.EmailVerifiedAt,
                 MobileNo = user.MobileNo,
 
                 // Profile

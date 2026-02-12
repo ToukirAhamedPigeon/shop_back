@@ -31,27 +31,39 @@ namespace shop_back.src.Shared.API.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
         {
-            var result = await _authService.LoginAsync(request);
-            if (result == null) return Unauthorized("Invalid credentials");
+            try{
+                var result = await _authService.LoginAsync(request);
+                if (result == null) return Unauthorized("Invalid credentials");
 
-            var expiry = DateTime.UtcNow.AddDays(7); // same as cookie expiry
+                var expiry = DateTime.UtcNow.AddDays(7); // same as cookie expiry
 
-            Response.Cookies.Append("refreshToken", result.RefreshToken!, new CookieOptions
+                Response.Cookies.Append("refreshToken", result.RefreshToken!, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    SameSite = SameSiteMode.Strict,
+                    Expires = expiry
+                });
+
+                result.RefreshToken = string.Empty; // don't send actual token
+
+                return Ok(new
+                {
+                    result.User,
+                    result.AccessToken,
+                    RefreshTokenExpiry = expiry
+                });
+            }
+            catch (Exception ex)
             {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.Strict,
-                Expires = expiry
-            });
+                if (ex.Message == "EMAIL_NOT_VERIFIED")
+                    return Unauthorized("EMAIL_NOT_VERIFIED");
 
-            result.RefreshToken = string.Empty; // don't send actual token
+                if (ex.Message == "USER_INACTIVE")
+                    return Unauthorized("USER_INACTIVE");
 
-            return Ok(new
-            {
-                result.User,
-                result.AccessToken,
-                RefreshTokenExpiry = expiry
-            });
+                return Unauthorized("Invalid credentials");
+            }
         }
 
         /// <summary>
