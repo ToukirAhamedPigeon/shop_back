@@ -29,6 +29,8 @@ namespace shop_back.src.Shared.Infrastructure.Data
         {
             base.OnModelCreating(modelBuilder);
 
+             modelBuilder.Entity<User>().HasQueryFilter(u => !u.IsDeleted);
+
              modelBuilder.Entity<MailVerification>()
                 .HasOne(mv => mv.User)
                 .WithMany()
@@ -127,6 +129,8 @@ namespace shop_back.src.Shared.Infrastructure.Data
                 .HasOne(mp => mp.Permission)
                 .WithMany(p => p.ModelPermissions)
                 .HasForeignKey(mp => mp.PermissionId);
+
+                
 
             // TranslationKey unique index
             modelBuilder.Entity<TranslationKey>()

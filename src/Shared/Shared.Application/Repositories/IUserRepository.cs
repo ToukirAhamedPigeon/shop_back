@@ -27,5 +27,14 @@ namespace shop_back.src.Shared.Application.Repositories
         Task<IEnumerable<SelectOptionDto>> GetDistinctCreatorsAsync(SelectRequestDto req);
         Task<IEnumerable<SelectOptionDto>> GetDistinctUpdatersAsync(SelectRequestDto req);
         Task<IEnumerable<SelectOptionDto>> GetDistinctDateTypesAsync(SelectRequestDto req);
+        Task<bool> ExistsByUsernameAsync(string username, Guid ignoreId);
+        Task<bool> ExistsByEmailAsync(string email, Guid ignoreId);
+        Task<bool> ExistsByMobileNoAsync(string mobileNo, Guid ignoreId);
+        Task<bool> ExistsByNIDAsync(string nid, Guid ignoreId);
+        Task<bool> HasRelatedRecordsAsync(Guid userId);
+        Task<bool> HasVerifiedEmailAsync(Guid userId);
+        Task HardDeleteAsync(Guid userId);
+        Task SoftDeleteAsync(Guid userId, Guid? deletedBy);
+        Task RestoreUserAsync(Guid userId, Guid? restoredBy);
     }
 }

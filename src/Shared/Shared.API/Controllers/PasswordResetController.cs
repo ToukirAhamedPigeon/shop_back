@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Application.DTOs.Auth;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace shop_back.src.Shared.API.Controllers
 {
@@ -10,10 +11,12 @@ namespace shop_back.src.Shared.API.Controllers
     public class PasswordResetController : ControllerBase
     {
         private readonly IPasswordResetService _resetService;
+        private readonly IChangePasswordService _changePasswordService;
 
-        public PasswordResetController(IPasswordResetService resetService)
+        public PasswordResetController(IPasswordResetService resetService, IChangePasswordService changePasswordService)
         {
             _resetService = resetService;
+            _changePasswordService = changePasswordService;
         }
 
         // 1️⃣ Request password reset email
@@ -85,6 +88,48 @@ namespace shop_back.src.Shared.API.Controllers
                 Console.WriteLine($"Error in ResetPasswordAsync: {ex.Message}");
                 return BadRequest(new CreatePasswordResetResponseDto { Message = ex.Message });
             }
+        }
+
+        [Authorize]
+        [HttpPost("change-password/request")]
+        public async Task<IActionResult> RequestPasswordChange([FromBody] ChangePasswordRequestDto request)
+        {
+            var currentUserId = User?.FindFirst("UserId")?.Value 
+                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            
+            if (string.IsNullOrEmpty(currentUserId) || !Guid.TryParse(currentUserId, out var userId))
+                return Unauthorized(new { message = "User not authenticated" });
+
+            try
+            {
+                var result = await _changePasswordService.RequestChangePasswordAsync(userId, request);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("change-password/verify")]
+        public async Task<IActionResult> VerifyPasswordChange([FromBody] VerifyPasswordChangeDto request)
+        {
+            try
+            {
+                await _changePasswordService.CompleteChangePasswordAsync(request);
+                return Ok(new { message = "Password changed successfully" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("change-password/validate/{token}")]
+        public async Task<IActionResult> ValidateChangeToken(string token)
+        {
+            var isValid = await _changePasswordService.ValidateChangeTokenAsync(token);
+            return Ok(new { isValid });
         }
     }
 }

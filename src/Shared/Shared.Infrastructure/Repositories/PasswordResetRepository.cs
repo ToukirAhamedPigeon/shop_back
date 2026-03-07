@@ -14,16 +14,19 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             _context = context;
         }
 
-        public async Task<PasswordReset?> GetByTokenAsync(string token)
+        public async Task<PasswordReset?> GetByTokenAsync(string token, string tokenType = "reset")
         {
             return await _context.PasswordResets
-                .FirstOrDefaultAsync(p => p.Token == token && !p.Used);
+                .Include(p => p.User)
+                .FirstOrDefaultAsync(p => p.Token == token && 
+                                        !p.Used && 
+                                        p.TokenType == tokenType);
         }
 
-        public async Task<IEnumerable<PasswordReset>> GetAllByUserAsync(Guid userId)
+        public async Task<IEnumerable<PasswordReset>> GetAllByUserAsync(Guid userId, string tokenType)
         {
             return await _context.PasswordResets
-                .Where(p => p.UserId == userId)
+                .Where(p => p.UserId == userId && p.TokenType == tokenType)
                 .OrderByDescending(p => p.CreatedAt)
                 .ToListAsync();
         }
@@ -42,6 +45,20 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();
+        }
+
+        public async Task MarkExistingTokensAsUsedAsync(Guid userId, string tokenType)
+        {
+            var tokens = await _context.PasswordResets
+                .Where(p => p.UserId == userId && 
+                            p.TokenType == tokenType && 
+                            !p.Used)
+                .ToListAsync();
+
+            foreach (var token in tokens)
+            {
+                token.Used = true;
+            }
         }
     }
 }

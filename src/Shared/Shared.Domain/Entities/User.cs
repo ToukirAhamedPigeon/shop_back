@@ -126,7 +126,6 @@ namespace shop_back.src.Shared.Domain.Entities
         // --------------------
         // Navigation
         // --------------------
-
         public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
     }
 }

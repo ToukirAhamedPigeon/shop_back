@@ -15,5 +15,8 @@ namespace shop_back.src.Shared.Application.Repositories
         Task<string[]> GetAllPermissionsAsync();
         Task AssignRolesAsync(Guid userId, string[] roles);
         Task AssignPermissionsAsync(Guid userId, string[] permissions);
+         Task SetRolesForUserAsync(Guid userId, IEnumerable<string> roleNames);
+        Task<string[]> GetPermissionsByRolesAsync(IEnumerable<string> roleNames);
+        Task SetPermissionsForUserAsync(Guid userId, IEnumerable<string> permissionNames);
     }
 }

@@ -19,6 +19,7 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
             services.AddScoped<IUserLogService, UserLogService>();
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IOptionsService, OptionsService>();
+            services.AddScoped<IChangePasswordService, ChangePasswordService>();
             services.AddScoped<IUserTableCombinationService, UserTableCombinationService>();
             services.AddScoped<IUniqueCheckService, UniqueCheckService>();
             services.AddScoped<UserLogHelper>();

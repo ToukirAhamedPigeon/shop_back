@@ -68,9 +68,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
         public async Task<User?> GetByIdAsync(Guid id)
         {
             return await _context.Users
-                .FirstOrDefaultAsync(u =>
-                    !u.IsDeleted && 
-                    u.Id == id);
+                .FirstOrDefaultAsync(u =>u.Id == id);
         }
 
         public async Task<User?> GetByMobileNoAsync(string mobileNo)
@@ -421,6 +419,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
         {
             await _context.SaveChangesAsync();
         }
+
         public async Task<IEnumerable<SelectOptionDto>> GetDistinctCreatorsAsync(SelectRequestDto req)
         {
             var query = _context.Users
@@ -500,5 +499,151 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
 
             return await Task.FromResult(paged);
         }
+        public async Task<bool> ExistsByUsernameAsync(string username, Guid ignoreId)
+        {
+            return await _context.Users
+                .AnyAsync(u => !u.IsDeleted && u.Username == username && u.Id != ignoreId);
+        }
+
+        public async Task<bool> ExistsByEmailAsync(string email, Guid ignoreId)
+        {
+            return await _context.Users
+                .AnyAsync(u => !u.IsDeleted && u.Email == email && u.Id != ignoreId);
+        }
+
+        public async Task<bool> ExistsByMobileNoAsync(string mobileNo, Guid ignoreId)
+        {
+            return await _context.Users
+                .AnyAsync(u => !u.IsDeleted && u.MobileNo == mobileNo && u.Id != ignoreId);
+        }
+
+        public async Task<bool> ExistsByNIDAsync(string nid, Guid ignoreId)
+        {
+            return await _context.Users
+                .AnyAsync(u => !u.IsDeleted && u.NID == nid && u.Id != ignoreId);
+        }
+
+        public async Task<bool> HasRelatedRecordsAsync(Guid userId)
+        {
+            // Check all tables except mail_verifications, model_roles, model_permissions
+            var hasUserLogs = await _context.UserLogs.AnyAsync(ul => ul.CreatedBy == userId);
+            var hasRefreshTokens = await _context.RefreshTokens.AnyAsync(rt => rt.UserId == userId);
+            var hasPasswordResets = await _context.PasswordResets.AnyAsync(pr => pr.UserId == userId);
+            var hasUserTableCombination = await _context.UserTableCombinations.AnyAsync(utc => utc.UserId == userId || utc.UpdatedBy == userId);
+
+            
+            // Add any other tables that should prevent permanent deletion
+            // For example: orders, invoices, etc.
+            
+            return hasUserLogs || hasRefreshTokens || hasPasswordResets || hasUserTableCombination;
+        }
+
+        public async Task<bool> HasVerifiedEmailAsync(Guid userId)
+        {
+            var user = await _context.Users
+                .Where(u => u.Id == userId)
+                .Select(u => u.EmailVerifiedAt != null)
+                .FirstOrDefaultAsync();
+            
+            return user;
+        }
+
+        private void DeleteUserProfileImage(User user)
+        {
+            if (string.IsNullOrEmpty(user?.ProfileImage))
+                return;
+
+            try
+            {
+                // Get the filename from the path (handles both /uploads/users/file.jpg and uploads/users/file.jpg)
+                var relativePath = user.ProfileImage.TrimStart('/');
+                
+                // Try different possible paths
+                var possiblePaths = new[]
+                {
+                    Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath),
+                    Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "users", Path.GetFileName(user.ProfileImage)),
+                    Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath.Replace('/', Path.DirectorySeparatorChar))
+                };
+
+                foreach (var path in possiblePaths)
+                {
+                    var fullPath = Path.GetFullPath(path);
+                    if (File.Exists(fullPath))
+                    {
+                        File.Delete(fullPath);
+                        Console.WriteLine($"Deleted profile image: {fullPath}");
+                        return; // Exit after successful deletion
+                    }
+                }
+
+                Console.WriteLine($"Profile image not found for deletion: {user.ProfileImage}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error deleting profile image for user {user.Id}: {ex.Message}");
+                // Don't throw - we still want to delete the user
+            }
+        }
+
+        public async Task HardDeleteAsync(Guid userId)
+        {
+            // First, get the user to access their profile image path
+            var user = await _context.Users
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Id == userId);
+            
+            if (user == null) return;
+
+            // Delete profile image from wwwroot if it exists
+            DeleteUserProfileImage(user);
+
+            // Delete related records in other tables
+            // Delete model_roles entries
+            var modelRoles = await _context.ModelRoles
+                .Where(mr => mr.ModelId == userId && mr.ModelName == "User")
+                .ToListAsync();
+            _context.ModelRoles.RemoveRange(modelRoles);
+            
+            // Delete model_permissions entries
+            var modelPermissions = await _context.ModelPermissions
+                .Where(mp => mp.ModelId == userId && mp.ModelName == "User")
+                .ToListAsync();
+            _context.ModelPermissions.RemoveRange(modelPermissions);
+            
+            // Delete mail_verifications entries
+            var mailVerifications = await _context.MailVerifications
+                .Where(mv => mv.UserId == userId)
+                .ToListAsync();
+            _context.MailVerifications.RemoveRange(mailVerifications);
+            
+            // Finally delete the user
+            _context.Users.Remove(user);
+        }
+
+        public async Task SoftDeleteAsync(Guid userId, Guid? deletedBy)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user != null)
+            {
+                user.IsDeleted = true;
+                user.DeletedAt = DateTime.UtcNow;
+                user.UpdatedBy = deletedBy;
+                user.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
+        public async Task RestoreUserAsync(Guid userId, Guid? restoredBy)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user != null)
+            {
+                user.IsDeleted = false;
+                user.DeletedAt = null;
+                user.UpdatedBy = restoredBy;
+                user.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
     }
 }

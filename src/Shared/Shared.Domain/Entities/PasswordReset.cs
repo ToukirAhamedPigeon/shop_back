@@ -31,6 +31,14 @@ namespace shop_back.src.Shared.Domain.Entities
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+        // NEW: Add token type to distinguish between reset and change
+        [Column("token_type")]
+        public string TokenType { get; set; } = "reset"; // "reset" or "change"
+
+        // NEW: Store hashed new password for change password flow
+        [Column("new_password_hash")]
+        public string? NewPasswordHash { get; set; }
+
         // Navigation
         public User? User { get; set; }
     }

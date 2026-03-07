@@ -37,7 +37,9 @@ public class PasswordResetService : IPasswordResetService
                 UserId = user.Id,
                 Token = token,
                 ExpiresAt = DateTime.UtcNow.AddHours(1),
-                Used = false
+                Used = false,
+                TokenType = "reset", // Set token type
+                CreatedAt = DateTime.UtcNow
             };
 
             await _resetRepo.AddAsync(reset);
@@ -60,12 +62,6 @@ public class PasswordResetService : IPasswordResetService
                 <p>If you did not request this, ignore this email.</p>
             ";
             var fullBody = _mailService.BuildEmailTemplate(bodyContent, "Reset your password");
-            // --- Test attachments ---
-            // var attachments = new List<string>
-            // {
-            //     FilePathHelper.GetApiUploadsPath("test", "sample1.pdf"),
-            //     FilePathHelper.GetApiUploadsPath("test", "sample2.txt")
-            // };
 
             await _mailService.SendEmailAsync(new Mail
             {
@@ -76,7 +72,6 @@ public class PasswordResetService : IPasswordResetService
                 ModuleName = "Auth",
                 Purpose = "PasswordReset",
                 CreatedBy = user.Id,
-                // Attachments = attachments
             });
         }
         catch (Exception ex)
@@ -88,15 +83,17 @@ public class PasswordResetService : IPasswordResetService
 
     public async Task<bool> ValidateTokenAsync(string token)
     {
-        var reset = await _resetRepo.GetByTokenAsync(token);
+        // Specify token type as "reset" for password reset tokens
+        var reset = await _resetRepo.GetByTokenAsync(token, "reset");
         if (reset == null || reset.Used || reset.ExpiresAt < DateTime.UtcNow) return false;
         return true;
     }
 
     public async Task ResetPasswordAsync(ResetPasswordRequestDto request)
     {
-        var reset = await _resetRepo.GetByTokenAsync(request.Token);
-        Console.WriteLine($"[TOKEN CHECK] => {reset?.Token} | Used = {reset?.Used} | ExpiresAt = {reset?.ExpiresAt}");
+        // Specify token type as "reset" for password reset tokens
+        var reset = await _resetRepo.GetByTokenAsync(request.Token, "reset");
+        Console.WriteLine($"[TOKEN CHECK] => {reset?.Token} | Used = {reset?.Used} | ExpiresAt = {reset?.ExpiresAt} | Type = {reset?.TokenType}");
 
         if (reset == null || reset.Used || reset.ExpiresAt < DateTime.UtcNow)
             throw new Exception("Invalid or expired token.");
@@ -126,8 +123,9 @@ public class PasswordResetService : IPasswordResetService
         // Convert the changes to JSON string
         var changeObject = new
         {
-            before = new { Password = oldPasswordHash },
-            after = new { Password = user.Password }
+            before = new { Password = "[REDACTED]" },
+            after = new { Password = "[REDACTED]" },
+            action = "Password reset via email"
         };
 
         string changesJson = Newtonsoft.Json.JsonConvert.SerializeObject(changeObject);
@@ -138,7 +136,7 @@ public class PasswordResetService : IPasswordResetService
                 userId: user.Id,
                 actionType: "Update",
                 detail: "User successfully reset password.",
-                changes: changesJson,      // ✔ string value
+                changes: changesJson,
                 modelName: "User",
                 modelId: user.Id
             );

@@ -86,5 +86,106 @@ namespace shop_back.src.Shared.API.Controllers
             return Ok(user);
         }
 
+        [Authorize]
+        [HttpGet("{id}/edit")]
+        [HasPermissionAny("read-admin-dashboard")]
+        public async Task<IActionResult> GetUserForEdit(Guid id)
+        {
+            var user = await _service.GetUserForEditAsync(id); // Only direct permissions
+            if (user == null) return NotFound();
+
+            return Ok(user);
+        }
+
+        [Authorize]
+        [HttpPut("{id}")]
+        [HasPermissionAny("read-admin-dashboard")] // Admin only
+        public async Task<IActionResult> Update(Guid id, [FromForm] UpdateUserRequest request)
+        {
+            var currentUserId = User?.FindFirst("UserId")?.Value 
+                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+
+            var result = await _service.UpdateUserAsync(id, request, currentUserId);
+
+            return result.Success ? Ok(result) : BadRequest(result.Message);
+        }
+
+         [Authorize]
+        [HttpGet("profile")]
+        public async Task<IActionResult> GetProfile()
+        {
+            var currentUserId = User?.FindFirst("UserId")?.Value 
+                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            
+            if (string.IsNullOrEmpty(currentUserId) || !Guid.TryParse(currentUserId, out var userId))
+                return Unauthorized();
+
+            var user = await _service.GetProfileAsync(userId);
+            if (user == null) return NotFound();
+
+            return Ok(user);
+        }
+
+        [Authorize]
+        [HttpPut("profile")]
+        public async Task<IActionResult> UpdateProfile([FromForm] UpdateProfileRequest request)
+        {
+            var currentUserId = User?.FindFirst("UserId")?.Value 
+                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            
+            if (string.IsNullOrEmpty(currentUserId) || !Guid.TryParse(currentUserId, out var userId))
+                return Unauthorized();
+
+            var result = await _service.UpdateProfileAsync(userId, request);
+
+            return result.Success ? Ok(result) : BadRequest(result.Message);
+        }
+        [Authorize]
+        [HttpDelete("{id}")]
+        [HasPermissionAny("read-admin-dashboard")]
+        public async Task<IActionResult> DeleteUser(Guid id, [FromQuery] bool permanent = false)
+        {
+            var currentUserId = User?.FindFirst("UserId")?.Value 
+                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            
+            var result = await _service.DeleteUserAsync(id, permanent, currentUserId);
+            
+            if (!result.Success)
+                return BadRequest(new { message = result.Message });
+            
+            return Ok(new { 
+                message = result.Message, 
+                deleteType = result.DeleteType 
+            });
+        }
+
+        [Authorize]
+        [HttpPost("{id}/restore")]
+        [HasPermissionAny("read-admin-dashboard")]
+        public async Task<IActionResult> RestoreUser(Guid id)
+        {
+            var currentUserId = User?.FindFirst("UserId")?.Value 
+                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            
+            var result = await _service.RestoreUserAsync(id, currentUserId);
+            
+            return result.Success ? Ok(new { message = result.Message }) : BadRequest(new { message = result.Message });
+        }
+
+        [Authorize]
+        [HttpGet("{id}/delete-info")]
+        [HasPermissionAny("read-admin-dashboard")]
+        public async Task<IActionResult> GetDeleteInfo(Guid id)
+        {
+            var result = await _service.CheckDeleteEligibilityAsync(id);
+            
+            if (!result.Success)
+                return NotFound(new { message = result.Message });
+            
+            return Ok(new { 
+                canBePermanent = result.CanBePermanent,
+                message = result.Message
+            });
+        }
     }
 }
