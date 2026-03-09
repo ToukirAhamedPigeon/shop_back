@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using shop_back.src.Shared.Application.Repositories;
 using shop_back.src.Shared.Infrastructure.Data;
+using shop_back.src.Shared.Infrastructure.Helpers;
 using shop_back.src.Shared.Domain.Entities;
 using shop_back.src.Shared.Application.DTOs.Users;
 using shop_back.src.Shared.Application.DTOs.Common;
 using System.Reflection;
+using Newtonsoft.Json;
 
 namespace shop_back.src.Shared.Infrastructure.Repositories
 {
@@ -87,15 +89,37 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             int PageSize
         )> GetFilteredAsync(UserFilterRequest req)
         {
-            var baseQuery = _context.Users.AsQueryable();
+            // Start with base query
+            IQueryable<User> baseQuery;
+            
+            Console.WriteLine($"req: {JsonConvert.SerializeObject(req)}");
 
-            // IsDeleted filter (default false)
-            if (req.IsDeleted.HasValue)
-                baseQuery = baseQuery.Where(u => u.IsDeleted == req.IsDeleted.Value);
+            // ============================================
+            // 1️⃣ IsDeleted filter - Handle this FIRST
+            // ============================================
+            if (req.IsDeleted.HasValue && req.IsDeleted.Value)
+            {
+                // Show ONLY deleted users - ignore global filter
+                baseQuery = _context.Users
+                    .IgnoreQueryFilters()
+                    .Where(u => u.IsDeleted == true);
+            }
             else
-                baseQuery = baseQuery.Where(u => !u.IsDeleted);
+            {
+                // Show ONLY non-deleted users (default) - global filter applies
+                baseQuery = _context.Users
+                    .Where(u => !u.IsDeleted);
+            }
 
-            // 🔍 Search (User fields + Roles + Permissions)
+            // ============================================
+            // 2️⃣ IsActive filter
+            // ============================================
+            if (req.IsActive.HasValue)
+                baseQuery = baseQuery.Where(u => u.IsActive == req.IsActive.Value);
+
+            // ============================================
+            // 3️⃣ Search (Q) - User fields + Roles + Permissions
+            // ============================================
             if (!string.IsNullOrWhiteSpace(req.Q))
             {
                 var q = req.Q.Trim();
@@ -107,7 +131,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     (u.MobileNo != null && u.MobileNo.Contains(q)) ||
                     (u.Address != null && u.Address.Contains(q)) ||
 
-                    // 🔥 Role search
+                    // Role search
                     _context.ModelRoles.Any(mr =>
                         mr.ModelId == u.Id &&
                         mr.ModelName == "User" &&
@@ -117,7 +141,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                         )
                     ) ||
 
-                    // 🔥 Permission search (from ModelPermission + RolePermission)
+                    // Permission search
                     (
                         _context.ModelPermissions.Any(mp =>
                             mp.ModelId == u.Id &&
@@ -127,7 +151,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                                 p.Name.Contains(q)
                             )
                         ) ||
-
                         _context.RolePermissions.Any(rp =>
                             _context.ModelRoles.Any(mr =>
                                 mr.ModelId == u.Id &&
@@ -143,17 +166,19 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 );
             }
 
-            // 🔘 Active filter
-            if (req.IsActive.HasValue)
-                baseQuery = baseQuery.Where(u => u.IsActive == req.IsActive.Value);
-
+            // ============================================
+            // 4️⃣ Gender filter
+            // ============================================
             if (req.Gender != null && req.Gender.Any())
             {
                 baseQuery = baseQuery.Where(u =>
-                    req.Gender.Contains(u.Gender ?? "")
+                    u.Gender != null && req.Gender.Contains(u.Gender)
                 );
             }
 
+            // ============================================
+            // 5️⃣ Created By filter
+            // ============================================
             if (req.CreatedBy != null && req.CreatedBy.Any())
             {
                 baseQuery = baseQuery.Where(u =>
@@ -162,6 +187,9 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 );
             }
 
+            // ============================================
+            // 6️⃣ Updated By filter
+            // ============================================
             if (req.UpdatedBy != null && req.UpdatedBy.Any())
             {
                 baseQuery = baseQuery.Where(u =>
@@ -169,6 +197,10 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     req.UpdatedBy.Contains(u.UpdatedBy.Value)
                 );
             }
+
+            // ============================================
+            // 7️⃣ Roles filter
+            // ============================================
             if (req.Roles != null && req.Roles.Any())
             {
                 baseQuery = baseQuery.Where(u =>
@@ -182,6 +214,10 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     )
                 );
             }
+
+            // ============================================
+            // 8️⃣ Permissions filter
+            // ============================================
             if (req.Permissions != null && req.Permissions.Any())
             {
                 baseQuery = baseQuery.Where(u =>
@@ -193,8 +229,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                             p.Id == mp.PermissionId &&
                             req.Permissions.Contains(p.Name)
                         )
-                    )
-                    ||
+                    ) ||
                     // Role based permissions
                     _context.RolePermissions.Any(rp =>
                         _context.ModelRoles.Any(mr =>
@@ -209,68 +244,64 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     )
                 );
             }
-            if (
-                req.DateType != null &&
-                req.DateType.Any() &&
-                (req.From.HasValue || req.To.HasValue)
-            )
+
+            // ============================================
+            // 9️⃣ Date range filters
+            // ============================================
+            if (req.DateType != null && req.DateType.Any() && (req.From.HasValue || req.To.HasValue))
             {
                 var from = req.From?.Date ?? DateTime.MinValue;
-                var to = (req.To?.Date ?? req.From?.Date ?? DateTime.MaxValue)
-                            .AddDays(1)
-                            .AddTicks(-1);
+                var to = req.To?.Date.AddDays(1).AddTicks(-1) ?? DateTime.MaxValue;
 
+                // Build OR condition for multiple date types
+                var dateFilterPredicate = PredicateBuilder.False<User>();
+                
                 foreach (var col in req.DateType)
                 {
-                    baseQuery = col.ToLower() switch
+                    switch (col.ToLower())
                     {
-                        "createdat" =>
-                            baseQuery.Where(u => u.CreatedAt >= from && u.CreatedAt <= to),
-
-                        "updatedat" =>
-                            baseQuery.Where(u => u.UpdatedAt >= from && u.UpdatedAt <= to),
-
-                        "dateofbirth" =>
-                            baseQuery.Where(u =>
-                                u.DateOfBirth.HasValue &&
-                                u.DateOfBirth.Value >= from &&
-                                u.DateOfBirth.Value <= to
-                            ),
-                        "emailverifiedat" =>
-                            baseQuery.Where(u =>
-                                u.EmailVerifiedAt.HasValue &&
-                                u.EmailVerifiedAt.Value >= from &&
-                                u.EmailVerifiedAt.Value <= to
-                            ),
-                        "lastloginat" =>
-                            baseQuery.Where(u =>
-                                u.LastLoginAt.HasValue &&
-                                u.LastLoginAt.Value >= from &&
-                                u.LastLoginAt.Value <= to
-                            ),
-                        "deletedat" =>
-                            baseQuery.Where(u =>
-                                u.DeletedAt.HasValue &&
-                                u.DeletedAt.Value >= from &&
-                                u.DeletedAt.Value <= to
-                            ),
-
-                        _ => baseQuery
-                    };
+                        case "createdat":
+                            dateFilterPredicate = dateFilterPredicate.Or(u => u.CreatedAt >= from && u.CreatedAt <= to);
+                            break;
+                        case "updatedat":
+                            dateFilterPredicate = dateFilterPredicate.Or(u => u.UpdatedAt >= from && u.UpdatedAt <= to);
+                            break;
+                        case "dateofbirth":
+                            dateFilterPredicate = dateFilterPredicate.Or(u => 
+                                u.DateOfBirth.HasValue && u.DateOfBirth.Value >= from && u.DateOfBirth.Value <= to);
+                            break;
+                        case "emailverifiedat":
+                            dateFilterPredicate = dateFilterPredicate.Or(u => 
+                                u.EmailVerifiedAt.HasValue && u.EmailVerifiedAt.Value >= from && u.EmailVerifiedAt.Value <= to);
+                            break;
+                        case "lastloginat":
+                            dateFilterPredicate = dateFilterPredicate.Or(u => 
+                                u.LastLoginAt.HasValue && u.LastLoginAt.Value >= from && u.LastLoginAt.Value <= to);
+                            break;
+                        case "deletedat":
+                            dateFilterPredicate = dateFilterPredicate.Or(u => 
+                                u.DeletedAt.HasValue && u.DeletedAt.Value >= from && u.DeletedAt.Value <= to);
+                            break;
+                    }
                 }
+
+                baseQuery = baseQuery.Where(dateFilterPredicate);
             }
 
             // 📊 Counts (before pagination)
             int totalCount = await baseQuery.CountAsync();
-            int grandTotalCount = await _context.Users.CountAsync();
+            
+            // Grand total should count ALL users (including deleted)
+            int grandTotalCount = await _context.Users.IgnoreQueryFilters().CountAsync();
 
             bool desc = req.SortOrder?.ToLower() == "desc";
             var sortBy = req.SortBy?.ToLower();
 
-            // 🔃 Sorting (User + Roles + Permissions)
-            var query = sortBy switch
+            // 🔃 Sorting
+            IOrderedQueryable<User> query;
+            
+            query = sortBy switch
             {
-                // 🔤 User text fields
                 "name" => desc ? baseQuery.OrderByDescending(x => x.Name) : baseQuery.OrderBy(x => x.Name),
                 "username" => desc ? baseQuery.OrderByDescending(x => x.Username) : baseQuery.OrderBy(x => x.Username),
                 "email" => desc ? baseQuery.OrderByDescending(x => x.Email) : baseQuery.OrderBy(x => x.Email),
@@ -279,70 +310,12 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 "address" => desc ? baseQuery.OrderByDescending(x => x.Address) : baseQuery.OrderBy(x => x.Address),
                 "timezone" => desc ? baseQuery.OrderByDescending(x => x.Timezone) : baseQuery.OrderBy(x => x.Timezone),
                 "nid" => desc ? baseQuery.OrderByDescending(x => x.NID) : baseQuery.OrderBy(x => x.NID),
-                "language" => desc ? baseQuery.OrderByDescending(x => x.NID) : baseQuery.OrderBy(x => x.NID),   
-
-                // 🔢 Boolean
+                "language" => desc ? baseQuery.OrderByDescending(x => x.Language) : baseQuery.OrderBy(x => x.Language),
                 "isactive" => desc ? baseQuery.OrderByDescending(x => x.IsActive) : baseQuery.OrderBy(x => x.IsActive),
-
-                // 📅 Dates
                 "createdat" => desc ? baseQuery.OrderByDescending(x => x.CreatedAt) : baseQuery.OrderBy(x => x.CreatedAt),
                 "updatedat" => desc ? baseQuery.OrderByDescending(x => x.UpdatedAt) : baseQuery.OrderBy(x => x.UpdatedAt),
                 "dateofbirth" => desc ? baseQuery.OrderByDescending(x => x.DateOfBirth) : baseQuery.OrderBy(x => x.DateOfBirth),
                 "lastloginat" => desc ? baseQuery.OrderByDescending(x => x.LastLoginAt) : baseQuery.OrderBy(x => x.LastLoginAt),
-
-                // 🔥 ROLE SORT (alphabetically first role)
-                "role" => desc
-                    ? baseQuery.OrderByDescending(u =>
-                        _context.ModelRoles
-                            .Where(mr => mr.ModelId == u.Id && mr.ModelName == "User")
-                            .Join(_context.Roles, mr => mr.RoleId, r => r.Id, (mr, r) => r.Name)
-                            .Min()
-                    )
-                    : baseQuery.OrderBy(u =>
-                        _context.ModelRoles
-                            .Where(mr => mr.ModelId == u.Id && mr.ModelName == "User")
-                            .Join(_context.Roles, mr => mr.RoleId, r => r.Id, (mr, r) => r.Name)
-                            .Min()
-                    ),
-
-                // 🔥 PERMISSION SORT (alphabetically first permission from BOTH sources)
-                "permission" => desc
-                    ? baseQuery.OrderByDescending(u =>
-                        _context.ModelPermissions
-                            .Where(mp => mp.ModelId == u.Id && mp.ModelName == "User")
-                            .Join(_context.Permissions, mp => mp.PermissionId, p => p.Id, (mp, p) => p.Name)
-                            .Concat(
-                                _context.RolePermissions
-                                    .Where(rp =>
-                                        _context.ModelRoles.Any(mr =>
-                                            mr.ModelId == u.Id &&
-                                            mr.ModelName == "User" &&
-                                            mr.RoleId == rp.RoleId
-                                        )
-                                    )
-                                    .Join(_context.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Name)
-                            )
-                            .Min()
-                    )
-                    : baseQuery.OrderBy(u =>
-                        _context.ModelPermissions
-                            .Where(mp => mp.ModelId == u.Id && mp.ModelName == "User")
-                            .Join(_context.Permissions, mp => mp.PermissionId, p => p.Id, (mp, p) => p.Name)
-                            .Concat(
-                                _context.RolePermissions
-                                    .Where(rp =>
-                                        _context.ModelRoles.Any(mr =>
-                                            mr.ModelId == u.Id &&
-                                            mr.ModelName == "User" &&
-                                            mr.RoleId == rp.RoleId
-                                        )
-                                    )
-                                    .Join(_context.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => p.Name)
-                            )
-                            .Min()
-                    ),
-
-                // 🧯 Default
                 _ => desc ? baseQuery.OrderByDescending(x => x.CreatedAt) : baseQuery.OrderBy(x => x.CreatedAt)
             };
 
@@ -356,11 +329,9 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             var result = new List<UserDto>();
             foreach (var user in users)
             {
-                // Roles
                 var roles = await _rolePermissionRepo
                     .GetRoleNamesByUserIdAsync(user.Id) ?? Array.Empty<string>();
 
-                // Permissions from BOTH RolePermission + ModelPermission
                 var permissions = await _rolePermissionRepo
                     .GetAllPermissionsByUserIdAsync(user.Id) ?? Array.Empty<string>();
 
@@ -385,10 +356,18 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     CreatedAt = user.CreatedAt,
                     UpdatedAt = user.UpdatedAt,
                     CreatedByName = user.CreatedBy.HasValue
-                        ? _context.Users.FirstOrDefault(u => u.Id == user.CreatedBy.Value)?.Name
+                        ? await _context.Users
+                            .IgnoreQueryFilters()
+                            .Where(u => u.Id == user.CreatedBy.Value)
+                            .Select(u => u.Name)
+                            .FirstOrDefaultAsync()
                         : null,
                     UpdatedByName = user.UpdatedBy.HasValue
-                        ? _context.Users.FirstOrDefault(u => u.Id == user.UpdatedBy.Value)?.Name
+                        ? await _context.Users
+                            .IgnoreQueryFilters()
+                            .Where(u => u.Id == user.UpdatedBy.Value)
+                            .Select(u => u.Name)
+                            .FirstOrDefaultAsync()
                         : null,
                     Roles = roles,
                     Permissions = permissions
@@ -403,7 +382,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 req.Limit
             );
         }
-
         public async Task AddAsync(User user)
         {
             await _context.Users.AddAsync(user);
@@ -422,31 +400,60 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
 
         public async Task<IEnumerable<SelectOptionDto>> GetDistinctCreatorsAsync(SelectRequestDto req)
         {
-            var query = _context.Users
-                .Join(_context.Users,
-                    joinedUser => joinedUser.CreatedBy,
-                    user => user.Id,
-                    (joinedUser, user) => new { joinedUser, user })
-                .AsQueryable();
+            // Console.WriteLine($"========== UserRepository.GetDistinctCreatorsAsync ==========");
+            // Console.WriteLine($"req: {JsonConvert.SerializeObject(req)}");
+            
+            // Get distinct creator IDs from ALL users (including deleted)
+            var creatorIds = await _context.Users
+                .IgnoreQueryFilters()  
+                .Where(u => u.CreatedBy != null)
+                .Select(u => u.CreatedBy.GetValueOrDefault())
+                .Distinct()
+                .ToListAsync();
 
-            if (req.Where != null && req.Where.TryGetValue("CreatedByName", out var createdByNameNode))
+            // Console.WriteLine($"Found {creatorIds.Count} distinct creator IDs (including deleted)");
+
+            if (!creatorIds.Any())
             {
-                var createdByName = createdByNameNode?.ToString() ?? "";
-                if (!string.IsNullOrEmpty(createdByName))
-                    query = query.Where(x => x.user.Name.Contains(createdByName));
+                Console.WriteLine("No creators found");
+                return new List<SelectOptionDto>();
             }
 
-            if (!string.IsNullOrWhiteSpace(req.Search))
-                query = query.Where(x => x.user.Name.Contains(req.Search));
+            // Now get the actual user details for those creator IDs
+            // Include deleted creators so we can show them
+            var query = _context.Users
+                .IgnoreQueryFilters()  // 🔥 Include deleted creators
+                .Where(u => creatorIds.Contains(u.Id))
+                .Select(u => new SelectOptionDto 
+                { 
+                    Value = u.Id.ToString(), 
+                    Label = u.Name + (u.IsDeleted ? " (Deleted)" : "")  // Mark deleted users
+                })
+                .AsQueryable();
 
+            // Apply search filter
+            if (!string.IsNullOrWhiteSpace(req.Search))
+            {
+                query = query.Where(x => x.Label.Contains(req.Search));
+            }
+
+            // Apply sorting
+            if (req.SortOrder?.ToLower() == "desc")
+            {
+                query = query.OrderByDescending(x => x.Label);
+            }
+            else
+            {
+                query = query.OrderBy(x => x.Label);
+            }
+
+            // Apply pagination
             var result = await query
-                .Select(x => new SelectOptionDto { Value = x.user.Id.ToString(), Label = x.user.Name })
-                .Distinct()
-                .OrderBy(x => x.Label)
                 .Skip(req.Skip)
                 .Take(req.Limit)
                 .ToListAsync();
 
+            Console.WriteLine($"Returning {result.Count} items");
             return result;
         }
 
@@ -459,11 +466,11 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     (joinedUser, user) => new { joinedUser, user })
                 .AsQueryable();
 
-            if (req.Where != null && req.Where.TryGetValue("CreatedByName", out var createdByNameNode))
+            if (req.Where != null && req.Where.TryGetValue("UpdatedByName", out var updatedByNameNode))
             {
-                var createdByName = createdByNameNode?.ToString() ?? "";
-                if (!string.IsNullOrEmpty(createdByName))
-                    query = query.Where(x => x.user.Name.Contains(createdByName));
+                var updatedByName = updatedByNameNode?.ToString() ?? "";
+                if (!string.IsNullOrEmpty(updatedByName))
+                    query = query.Where(x => x.user.Name.Contains(updatedByName));
             }
 
             if (!string.IsNullOrWhiteSpace(req.Search))
@@ -471,6 +478,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
 
             var result = await query
                 .Select(x => new SelectOptionDto { Value = x.user.Id.ToString(), Label = x.user.Name })
+                .IgnoreQueryFilters()  // 🔥 Include deleted updaters
                 .Distinct()
                 .OrderBy(x => x.Label)
                 .Skip(req.Skip)

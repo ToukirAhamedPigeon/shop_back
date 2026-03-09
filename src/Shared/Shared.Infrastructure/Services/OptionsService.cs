@@ -31,51 +31,99 @@ namespace shop_back.src.Shared.Infrastructure.Services
         {
             req ??= new SelectRequestDto();
 
-            string cacheKey = $"Options:{type}:{req.Search}:{req.Skip}:{req.Limit}";
+            // Console.WriteLine($"========== OptionsService.GetOptionsAsync ==========");
+            // Console.WriteLine($"Type: {type}");
+            // Console.WriteLine($"Full req: {JsonSerializer.Serialize(req)}");
+            // Console.WriteLine($"Search: '{req.Search}'");
+            // Console.WriteLine($"Skip: {req.Skip}, Limit: {req.Limit}");
+            // Console.WriteLine($"SortBy: {req.SortBy}, SortOrder: {req.SortOrder}");
+            // Console.WriteLine($"Where count: {req.Where?.Count ?? 0}");
+            // if (req.Where != null)
+            // {
+            //     foreach (var kvp in req.Where)
+            //     {
+            //         Console.WriteLine($"  Where[{kvp.Key}]: {kvp.Value}");
+            //     }
+            // }
 
-            // 🔹 Try cache first
+            // 🔥 FIX: Include Where in cache key
+            string whereJson = req.Where != null ? JsonSerializer.Serialize(req.Where) : "";
+            string cacheKey = $"Options:{type}:{req.Search}:{req.Skip}:{req.Limit}:{req.SortBy}:{req.SortOrder}:{whereJson}";
+
+            // Try cache first
             var cached = await _cache.StringGetAsync(cacheKey);
             List<SelectOptionDto> result;
 
             if (cached.HasValue)
             {
-                // Deserialize cached data
+                // Console.WriteLine($"Cache HIT for {type}");
                 result = JsonSerializer.Deserialize<List<SelectOptionDto>>(cached!) ?? new List<SelectOptionDto>();
-
-                // 🔹 Normalize labels even for cached items
-                foreach (var item in result)
-                    item.Label = LabelFormatter.ToReadable(item.Label);
-
-                // 🔹 Optionally, refresh cache with normalized labels
-                await _cache.StringSetAsync(cacheKey, JsonSerializer.Serialize(result), _cacheTtl);
-
                 return result;
             }
-            result = type.ToLower() switch
+
+            // Console.WriteLine($"Cache MISS for {type}, fetching from repository...");
+
+            switch (type.ToLower())
             {
-                "userlogcollections" => (await _userLogRepository.GetDistinctModelNamesAsync(req)).ToList(),
-                "userlogactiontypes" => (await _userLogRepository.GetDistinctActionTypesAsync(req)).ToList(),
-                "userlogcreators" => (await _userLogRepository.GetDistinctCreatorsAsync(req)).ToList(),
-                "usercreators" => (await _userRepository.GetDistinctCreatorsAsync(req)).ToList(),
-                "userupdaters" => (await _userRepository.GetDistinctUpdatersAsync(req)).ToList(),
-                "userdatetypes" => (await _userRepository.GetDistinctDateTypesAsync(req)).ToList(),
-                "roles" => (await _rolePermissionRepository.GetAllRolesAsync())
-                            .Select(r => new SelectOptionDto { Value = r, Label = r })
-                            .ToList(),
+                case "userlogcollections":
+                    Console.WriteLine("Calling _userLogRepository.GetDistinctModelNamesAsync");
+                    result = (await _userLogRepository.GetDistinctModelNamesAsync(req)).ToList();
+                    break;
+                    
+                case "userlogactiontypes":
+                    Console.WriteLine("Calling _userLogRepository.GetDistinctActionTypesAsync");
+                    result = (await _userLogRepository.GetDistinctActionTypesAsync(req)).ToList();
+                    break;
+                    
+                case "userlogcreators":
+                    // Console.WriteLine("Calling _userLogRepository.GetDistinctCreatorsAsync");
+                    result = (await _userLogRepository.GetDistinctCreatorsAsync(req)).ToList();
+                    break;
+                    
+                case "usercreators":
+                    // Console.WriteLine("Calling _userRepository.GetDistinctCreatorsAsync");
+                    result = (await _userRepository.GetDistinctCreatorsAsync(req)).ToList();
+                    break;
+                    
+                case "userupdaters":
+                    // Console.WriteLine("Calling _userRepository.GetDistinctUpdatersAsync");
+                    result = (await _userRepository.GetDistinctUpdatersAsync(req)).ToList();
+                    break;
+                    
+                case "userdatetypes":
+                    // Console.WriteLine("Calling _userRepository.GetDistinctDateTypesAsync");
+                    result = (await _userRepository.GetDistinctDateTypesAsync(req)).ToList();
+                    break;
+                    
+                case "roles":
+                    // Console.WriteLine("Calling _rolePermissionRepository.GetAllRolesAsync");
+                    var roles = await _rolePermissionRepository.GetAllRolesAsync();
+                    result = roles.Select(r => new SelectOptionDto { Value = r, Label = r }).ToList();
+                    break;
+                    
+                case "permissions":
+                    // Console.WriteLine("Calling _rolePermissionRepository.GetAllPermissionsAsync");
+                    var permissions = await _rolePermissionRepository.GetAllPermissionsAsync();
+                    result = permissions.Select(p => new SelectOptionDto { Value = p, Label = p }).ToList();
+                    break;
+                    
+                default:
+                    // Console.WriteLine($"Unknown type: {type}");
+                    result = new List<SelectOptionDto>();
+                    break;
+            }
 
-                "permissions" => (await _rolePermissionRepository.GetAllPermissionsAsync())
-                                  .Select(p => new SelectOptionDto { Value = p, Label = p })
-                                  .ToList(),
-                _ => new List<SelectOptionDto>()
-            };
+            // Console.WriteLine($"Repository returned {result.Count} items");
 
-            // 🔹 Normalize label
+            // Normalize label
             foreach (var item in result)
             {
                 item.Label = LabelFormatter.ToReadable(item.Label);
             }
 
+            // Cache the result
             await _cache.StringSetAsync(cacheKey, JsonSerializer.Serialize(result), _cacheTtl);
+            // Console.WriteLine($"Cached result for {type}");
 
             return result;
         }

@@ -32,10 +32,11 @@ namespace shop_back.src.Shared.Infrastructure.Data
              modelBuilder.Entity<User>().HasQueryFilter(u => !u.IsDeleted);
 
              modelBuilder.Entity<MailVerification>()
-                .HasOne(mv => mv.User)
+                .HasOne(m => m.User)
                 .WithMany()
-                .HasForeignKey(mv => mv.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .HasForeignKey(m => m.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .IsRequired(false);
 
             foreach (var entityType in modelBuilder.Model.GetEntityTypes())
             {
@@ -95,7 +96,8 @@ namespace shop_back.src.Shared.Infrastructure.Data
                 .HasOne(r => r.User)
                 .WithMany(u => u.RefreshTokens)
                 .HasForeignKey(r => r.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Cascade)
+                .IsRequired(false);
 
             // Role unique constraint
             modelBuilder.Entity<Role>()
@@ -152,16 +154,18 @@ namespace shop_back.src.Shared.Infrastructure.Data
             // Otp -> User relationship
             modelBuilder.Entity<Otp>()
                 .HasOne(o => o.User)
-                .WithMany() // No collection navigation in User (only single side)
+                .WithMany()
                 .HasForeignKey(o => o.UserId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Cascade)
+                .IsRequired(false);
 
             // PasswordReset -> User relationship
             modelBuilder.Entity<PasswordReset>()
-                .HasOne(pr => pr.User)
-                .WithMany() // No collection navigation in User
-                .HasForeignKey(pr => pr.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .HasOne(p => p.User)
+                .WithMany()
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .IsRequired(false);
 
                  // Mail -> User relationship
             modelBuilder.Entity<Mail>()
