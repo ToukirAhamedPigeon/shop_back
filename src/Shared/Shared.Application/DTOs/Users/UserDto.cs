@@ -29,6 +29,7 @@ namespace shop_back.src.Shared.Application.DTOs.Users
 
         // Status
         public bool IsActive { get; set; }
+        public bool IsDeleted { get; set; }
 
         // Audit
         public DateTime CreatedAt { get; set; }

@@ -237,6 +237,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 EmailVerifiedAt = user.EmailVerifiedAt,
                 MobileNo = user.MobileNo ?? string.Empty,
                 IsActive = user.IsActive,
+                IsDeleted = user.IsDeleted,
                 ProfileImage = user.ProfileImage,
                 Bio = user.Bio,
                 QRCode = user.QRCode,

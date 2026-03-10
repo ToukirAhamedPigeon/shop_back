@@ -90,6 +90,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
                 // Status
                 IsActive = user.IsActive,
+                IsDeleted = user.IsDeleted,
 
                 // Audit
                 CreatedAt = user.CreatedAt,
@@ -131,6 +132,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 NID = user.NID,
                 Language = user.Language,
                 IsActive = user.IsActive,
+                IsDeleted = user.IsDeleted,
                 CreatedAt = user.CreatedAt,
                 UpdatedAt = user.UpdatedAt,
                 CreatedByName = user.CreatedBy.HasValue
@@ -450,6 +452,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 NID = user.NID,
                 QRCode = user.QRCode,
                 IsActive = user.IsActive,
+                IsDeleted = user.IsDeleted, 
                 CreatedAt = user.CreatedAt,
                 UpdatedAt = user.UpdatedAt,
                 Roles = roles,

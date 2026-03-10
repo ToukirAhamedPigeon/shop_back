@@ -353,6 +353,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     NID = user.NID,
                     Language = user.Language,
                     IsActive = user.IsActive,
+                    IsDeleted = user.IsDeleted,
                     CreatedAt = user.CreatedAt,
                     UpdatedAt = user.UpdatedAt,
                     CreatedByName = user.CreatedBy.HasValue
@@ -538,7 +539,10 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             var hasRefreshTokens = await _context.RefreshTokens.AnyAsync(rt => rt.UserId == userId);
             var hasPasswordResets = await _context.PasswordResets.AnyAsync(pr => pr.UserId == userId);
             var hasUserTableCombination = await _context.UserTableCombinations.AnyAsync(utc => utc.UserId == userId || utc.UpdatedBy == userId);
-
+            Console.WriteLine($"hasUserLogs: {hasUserLogs}");
+            Console.WriteLine($"hasRefreshTokens: {hasRefreshTokens}");
+            Console.WriteLine($"hasPasswordResets: {hasPasswordResets}");
+            Console.WriteLine($"hasUserTableCombination: {hasUserTableCombination}");
             
             // Add any other tables that should prevent permanent deletion
             // For example: orders, invoices, etc.
