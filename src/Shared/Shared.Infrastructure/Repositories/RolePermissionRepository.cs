@@ -245,7 +245,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
         }
         
         public async Task<(IEnumerable<RoleDto> Roles, int TotalCount, int GrandTotalCount, int PageIndex, int PageSize)> 
-            GetFilteredRolesAsync(RolePermissionFilterRequest req)
+        GetFilteredRolesAsync(RolePermissionFilterRequest req)
         {
             IQueryable<Role> baseQuery;
             
@@ -265,6 +265,21 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             // Handle active filter
             if (req.IsActive.HasValue)
                 baseQuery = baseQuery.Where(r => r.IsActive == req.IsActive.Value);
+            
+            // Handle permissions filter - filter roles by associated permissions
+            if (req.Permissions != null && req.Permissions.Any())
+            {
+                baseQuery = baseQuery.Where(r =>
+                    _context.RolePermissions.Any(rp =>
+                        rp.RoleId == r.Id &&
+                        _context.Permissions.Any(p =>
+                            p.Id == rp.PermissionId &&
+                            req.Permissions.Contains(p.Name) &&
+                            p.IsActive && !p.IsDeleted
+                        )
+                    )
+                );
+            }
             
             // Handle search
             if (!string.IsNullOrWhiteSpace(req.Q))
@@ -430,74 +445,92 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
 
         // Permission CRUD methods
         public async Task<(IEnumerable<PermissionDto> Permissions, int TotalCount, int GrandTotalCount, int PageIndex, int PageSize)> 
-            GetFilteredPermissionsAsync(RolePermissionFilterRequest req)
+    GetFilteredPermissionsAsync(RolePermissionFilterRequest req)
+    {
+        IQueryable<Permission> baseQuery;
+        
+        // Handle deleted filter
+        if (req.IsDeleted.HasValue && req.IsDeleted.Value)
         {
-            IQueryable<Permission> baseQuery;
-            
-            if (req.IsDeleted.HasValue && req.IsDeleted.Value)
-            {
-                baseQuery = _context.Permissions
-                    .IgnoreQueryFilters()
-                    .Where(p => p.IsDeleted == true);
-            }
-            else
-            {
-                baseQuery = _context.Permissions
-                    .Where(p => !p.IsDeleted);
-            }
-            
-            if (req.IsActive.HasValue)
-                baseQuery = baseQuery.Where(p => p.IsActive == req.IsActive.Value);
-            
-            if (!string.IsNullOrWhiteSpace(req.Q))
-            {
-                var q = req.Q.Trim();
-                baseQuery = baseQuery.Where(p => 
-                    p.Name.Contains(q) ||
-                    p.GuardName.Contains(q));
-            }
-            
-            int totalCount = await baseQuery.CountAsync();
-            int grandTotalCount = await _context.Permissions.IgnoreQueryFilters().CountAsync();
-            
-            bool desc = req.SortOrder?.ToLower() == "desc";
-            var sortBy = req.SortBy?.ToLower();
-            
-            IOrderedQueryable<Permission> query;
-            query = sortBy switch
-            {
-                "name" => desc ? baseQuery.OrderByDescending(x => x.Name) : baseQuery.OrderBy(x => x.Name),
-                "guardname" => desc ? baseQuery.OrderByDescending(x => x.GuardName) : baseQuery.OrderBy(x => x.GuardName),
-                "isactive" => desc ? baseQuery.OrderByDescending(x => x.IsActive) : baseQuery.OrderBy(x => x.IsActive),
-                "createdat" => desc ? baseQuery.OrderByDescending(x => x.CreatedAt) : baseQuery.OrderBy(x => x.CreatedAt),
-                _ => desc ? baseQuery.OrderByDescending(x => x.CreatedAt) : baseQuery.OrderBy(x => x.CreatedAt)
-            };
-            
-            var permissions = await query
-                .Skip((req.Page - 1) * req.Limit)
-                .Take(req.Limit)
-                .ToListAsync();
-            
-            var result = new List<PermissionDto>();
-            foreach (var permission in permissions)
-            {
-                var roles = await GetRolesByPermissionIdAsync(permission.Id);
-                result.Add(new PermissionDto
-                {
-                    Id = permission.Id,
-                    Name = permission.Name,
-                    GuardName = permission.GuardName,
-                    IsActive = permission.IsActive,
-                    IsDeleted = permission.IsDeleted,
-                    CreatedAt = permission.CreatedAt,
-                    UpdatedAt = permission.UpdatedAt,
-                    Roles = roles.Select(r => 
-                        r.GetType().GetProperty("Name")?.GetValue(r)?.ToString() ?? "").ToArray()
-                });
-            }
-            
-            return (result, totalCount, grandTotalCount, req.Page - 1, req.Limit);
+            baseQuery = _context.Permissions
+                .IgnoreQueryFilters()
+                .Where(p => p.IsDeleted == true);
         }
+        else
+        {
+            baseQuery = _context.Permissions
+                .Where(p => !p.IsDeleted);
+        }
+        
+        // Handle active filter
+        if (req.IsActive.HasValue)
+            baseQuery = baseQuery.Where(p => p.IsActive == req.IsActive.Value);
+        
+        // Handle roles filter - filter permissions by associated roles
+        if (req.Roles != null && req.Roles.Any())
+        {
+            baseQuery = baseQuery.Where(p =>
+                _context.RolePermissions.Any(rp =>
+                    rp.PermissionId == p.Id &&
+                    _context.Roles.Any(r =>
+                        r.Id == rp.RoleId &&
+                        req.Roles.Contains(r.Name) &&
+                        r.IsActive && !r.IsDeleted
+                    )
+                )
+            );
+        }
+        
+        // Handle search
+        if (!string.IsNullOrWhiteSpace(req.Q))
+        {
+            var q = req.Q.Trim();
+            baseQuery = baseQuery.Where(p => 
+                p.Name.Contains(q) ||
+                p.GuardName.Contains(q));
+        }
+        
+        int totalCount = await baseQuery.CountAsync();
+        int grandTotalCount = await _context.Permissions.IgnoreQueryFilters().CountAsync();
+        
+        bool desc = req.SortOrder?.ToLower() == "desc";
+        var sortBy = req.SortBy?.ToLower();
+        
+        IOrderedQueryable<Permission> query;
+        query = sortBy switch
+        {
+            "name" => desc ? baseQuery.OrderByDescending(x => x.Name) : baseQuery.OrderBy(x => x.Name),
+            "guardname" => desc ? baseQuery.OrderByDescending(x => x.GuardName) : baseQuery.OrderBy(x => x.GuardName),
+            "isactive" => desc ? baseQuery.OrderByDescending(x => x.IsActive) : baseQuery.OrderBy(x => x.IsActive),
+            "createdat" => desc ? baseQuery.OrderByDescending(x => x.CreatedAt) : baseQuery.OrderBy(x => x.CreatedAt),
+            _ => desc ? baseQuery.OrderByDescending(x => x.CreatedAt) : baseQuery.OrderBy(x => x.CreatedAt)
+        };
+        
+        var permissions = await query
+            .Skip((req.Page - 1) * req.Limit)
+            .Take(req.Limit)
+            .ToListAsync();
+        
+        var result = new List<PermissionDto>();
+        foreach (var permission in permissions)
+        {
+            var roles = await GetRolesByPermissionIdAsync(permission.Id);
+            result.Add(new PermissionDto
+            {
+                Id = permission.Id,
+                Name = permission.Name,
+                GuardName = permission.GuardName,
+                IsActive = permission.IsActive,
+                IsDeleted = permission.IsDeleted,
+                CreatedAt = permission.CreatedAt,
+                UpdatedAt = permission.UpdatedAt,
+                Roles = roles.Select(r => 
+                    r.GetType().GetProperty("Name")?.GetValue(r)?.ToString() ?? "").ToArray()
+            });
+        }
+        
+        return (result, totalCount, grandTotalCount, req.Page - 1, req.Limit);
+    }
 
         public async Task<Permission?> GetPermissionByIdAsync(Guid id)
         {

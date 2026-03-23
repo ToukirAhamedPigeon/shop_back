@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace shop_back.src.Shared.Application.DTOs.Common
 {
     public class RolePermissionFilterRequest
@@ -11,6 +14,12 @@ namespace shop_back.src.Shared.Application.DTOs.Common
         // Can be "true", "false", or "all"
         public string? IsActiveStr { get; set; }
         public string? IsDeletedStr { get; set; }
+        
+        // For filtering roles by permissions
+        public List<string>? Permissions { get; set; }
+        
+        // For filtering permissions by roles
+        public List<string>? Roles { get; set; }
         
         public bool? IsActive => ParseBool(IsActiveStr);
         public bool? IsDeleted => ParseBool(IsDeletedStr);
