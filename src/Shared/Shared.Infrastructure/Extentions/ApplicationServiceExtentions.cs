@@ -22,6 +22,8 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
             services.AddScoped<IChangePasswordService, ChangePasswordService>();
             services.AddScoped<IUserTableCombinationService, UserTableCombinationService>();
             services.AddScoped<IUniqueCheckService, UniqueCheckService>();
+            services.AddScoped<IRoleService, RoleService>();
+            services.AddScoped<IPermissionService, PermissionService>();
             services.AddScoped<UserLogHelper>();
             services.AddHttpContextAccessor();
 

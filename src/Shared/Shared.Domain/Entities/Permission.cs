@@ -25,11 +25,21 @@ namespace shop_back.src.Shared.Domain.Entities
         [Column("is_deleted")]
         public bool IsDeleted { get; set; } = false;
 
+        [Column("deleted_at")]
+        public DateTime? DeletedAt { get; set; }
+
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         [Column("updated_at")]
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        // Audit fields
+        [Column("created_by")]
+        public Guid? CreatedBy { get; set; }
+
+        [Column("updated_by")]
+        public Guid? UpdatedBy { get; set; }
 
         // 🔗 Navigation: One permission can belong to many RolePermissions and ModelPermissions
         public virtual ICollection<RolePermission> RolePermissions { get; set; } = new List<RolePermission>();

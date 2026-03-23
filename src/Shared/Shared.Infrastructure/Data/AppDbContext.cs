@@ -177,6 +177,31 @@ namespace shop_back.src.Shared.Infrastructure.Data
              modelBuilder.Entity<UserTableCombination>()
                 .Property(e => e.ShowColumnCombinations)
                 .HasColumnType("text[]");
+
+                modelBuilder.Entity<Role>()
+                .Property(r => r.CreatedBy)
+                .HasColumnName("created_by");
+
+            modelBuilder.Entity<Role>()
+                .Property(r => r.UpdatedBy)
+                .HasColumnName("updated_by");
+
+            modelBuilder.Entity<Role>()
+                .Property(r => r.DeletedAt)
+                .HasColumnName("deleted_at");
+
+            // Configure audit fields for Permission
+            modelBuilder.Entity<Permission>()
+                .Property(p => p.CreatedBy)
+                .HasColumnName("created_by");
+
+            modelBuilder.Entity<Permission>()
+                .Property(p => p.UpdatedBy)
+                .HasColumnName("updated_by");
+
+            modelBuilder.Entity<Permission>()
+                .Property(p => p.DeletedAt)
+                .HasColumnName("deleted_at");
         }    
     }
 }
