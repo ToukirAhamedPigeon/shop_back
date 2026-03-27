@@ -22,7 +22,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpPost]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("read-admin-users")]
         public async Task<IActionResult> GetUsers([FromBody] UserFilterRequest request)
         {
             var result = await _service.GetUsersAsync(request);
@@ -31,7 +31,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpGet("{id}")]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("read-admin-users")]
         public async Task<IActionResult> GetUser(Guid id)
         {
             var user = await _service.GetUserAsync(id);
@@ -42,7 +42,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpPost("create")]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("create-admin-users")]
         public async Task<IActionResult> Create([FromForm] CreateUserRequest request)
         {
             var currentUserId = User?.FindFirst("UserId")?.Value ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
@@ -59,7 +59,7 @@ namespace shop_back.src.Shared.API.Controllers
             return Ok(result.Message);
         }
         [Authorize]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("create-admin-users")]
         [HttpPost("{id}/resend-verification")]
         public async Task<IActionResult> ResendVerification(Guid id)
         {
@@ -72,7 +72,7 @@ namespace shop_back.src.Shared.API.Controllers
         }
 
         [Authorize]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("update-admin-users")]
         [HttpPost("{id}/regenerate-qr")]
         public async Task<IActionResult> RegenerateQr(Guid id)
         {
@@ -88,7 +88,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpGet("{id}/edit")]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("update-admin-users")]
         public async Task<IActionResult> GetUserForEdit(Guid id)
         {
             var user = await _service.GetUserForEditAsync(id); // Only direct permissions
@@ -99,7 +99,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpPut("{id}")]
-        [HasPermissionAny("read-admin-dashboard")] // Admin only
+        [HasPermissionAny("update-admin-users")] // Admin only
         public async Task<IActionResult> Update(Guid id, [FromForm] UpdateUserRequest request)
         {
             var currentUserId = User?.FindFirst("UserId")?.Value 
@@ -110,8 +110,9 @@ namespace shop_back.src.Shared.API.Controllers
             return result.Success ? Ok(result) : BadRequest(result.Message);
         }
 
-         [Authorize]
+        [Authorize]
         [HttpGet("profile")]
+        [HasPermissionAny("read-admin-profile")]
         public async Task<IActionResult> GetProfile()
         {
             var currentUserId = User?.FindFirst("UserId")?.Value 
@@ -128,6 +129,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpPut("profile")]
+        [HasPermissionAny("update-admin-profile")]
         public async Task<IActionResult> UpdateProfile([FromForm] UpdateProfileRequest request)
         {
             var currentUserId = User?.FindFirst("UserId")?.Value 
@@ -142,7 +144,7 @@ namespace shop_back.src.Shared.API.Controllers
         }
         [Authorize]
         [HttpDelete("{id}")]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("delete-admin-users")]
         public async Task<IActionResult> DeleteUser(Guid id, [FromQuery] bool permanent = false)
         {
             var currentUserId = User?.FindFirst("UserId")?.Value 
@@ -161,7 +163,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpPost("{id}/restore")]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("restore-admin-users")]
         public async Task<IActionResult> RestoreUser(Guid id)
         {
             var currentUserId = User?.FindFirst("UserId")?.Value 
@@ -174,7 +176,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpGet("{id}/delete-info")]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("restore-admin-users")]
         public async Task<IActionResult> GetDeleteInfo(Guid id)
         {
             var result = await _service.CheckDeleteEligibilityAsync(id);

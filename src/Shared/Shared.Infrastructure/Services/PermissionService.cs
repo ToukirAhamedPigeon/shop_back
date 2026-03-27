@@ -72,30 +72,40 @@ namespace shop_back.src.Shared.Infrastructure.Services
             if (string.IsNullOrWhiteSpace(request.Names))
                 return (false, "Permission names are required");
             
-            // Parse multiple permission names separated by "="
-            var permissionNames = request.Names.Split('=', StringSplitOptions.RemoveEmptyEntries)
-                .Select(n => n.Trim())
-                .Where(n => !string.IsNullOrWhiteSpace(n))
-                .Distinct()
-                .ToList();
+            // Parse multiple permission names separated by "=" AND expand any shorthand patterns
+            var permissionNames = NameExpander.ExpandNames(request.Names);
             
             if (!permissionNames.Any())
                 return (false, "At least one valid permission name is required");
             
-            // Check for duplicates in request
+            // Check for duplicates in request (after expansion)
             if (permissionNames.Count != permissionNames.Distinct().Count())
                 return (false, "Duplicate permission names found in request");
             
             // Check for existing permissions
             var existingPermissions = new List<string>();
+            var validPermissions = new List<string>();
+            
             foreach (var permissionName in permissionNames)
             {
                 if (await _repo.PermissionExistsAsync(permissionName))
+                {
                     existingPermissions.Add(permissionName);
+                }
+                else
+                {
+                    validPermissions.Add(permissionName);
+                }
             }
             
             if (existingPermissions.Any())
-                return (false, $"Permission(s) already exist: {string.Join(", ", existingPermissions)}");
+            {
+                if (!validPermissions.Any())
+                {
+                    return (false, $"Permission(s) already exist: {string.Join(", ", existingPermissions)}");
+                }
+                // If some permissions exist and some don't, continue with valid ones
+            }
             
             // Parse IsActive
             bool isActive = string.Equals(request.IsActive, "true", StringComparison.OrdinalIgnoreCase);
@@ -111,7 +121,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
             {
                 var createdPermissions = new List<Permission>();
                 
-                foreach (var permissionName in permissionNames)
+                foreach (var permissionName in validPermissions)
                 {
                     var permission = new Permission
                     {
@@ -129,10 +139,11 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     await _repo.CreatePermissionAsync(permission);
                     createdPermissions.Add(permission);
                     
-                    // Assign roles if provided
+                    // Assign roles if provided (also expand role names if needed)
                     if (request.Roles.Any())
                     {
-                        await _repo.AssignRolesToPermissionAsync(permission.Id, request.Roles);
+                        var expandedRoles = NameExpander.ExpandNames(string.Join("=", request.Roles));
+                        await _repo.AssignRolesToPermissionAsync(permission.Id, expandedRoles);
                     }
                 }
                 
@@ -150,7 +161,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 await _userLogHelper.LogAsync(
                     userId: createdByGuid ?? Guid.Empty,
                     actionType: "Create",
-                    detail: $"{permissionNames.Count} permission(s) created: {string.Join(", ", permissionNames)}",
+                    detail: $"{createdPermissions.Count} permission(s) created: {string.Join(", ", createdPermissions.Select(p => p.Name))}" +
+                            (existingPermissions.Any() ? $" (Skipped existing: {string.Join(", ", existingPermissions)})" : ""),
                     changes: changesJson,
                     modelName: "Permission",
                     modelId: createdPermissions.First().Id
@@ -158,7 +170,11 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 
                 await transaction.CommitAsync();
                 
-                return (true, $"{permissionNames.Count} permission(s) created successfully");
+                var message = $"{createdPermissions.Count} permission(s) created successfully";
+                if (existingPermissions.Any())
+                    message += $" (Skipped existing: {string.Join(", ", existingPermissions)})";
+                
+                return (true, message);
             }
             catch (Exception ex)
             {

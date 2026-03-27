@@ -20,7 +20,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpPost]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("read-admin-user-logs")]
         public async Task<IActionResult> GetFiltered([FromBody] UserLogFilterRequest request)
         {
             var result = await _service.GetFilteredLogsAsync(request);
@@ -29,7 +29,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpGet("{id}")]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("read-admin-user-logs")]
         public async Task<IActionResult> Get(Guid id)
         {
             var log = await _service.GetLogAsync(id);

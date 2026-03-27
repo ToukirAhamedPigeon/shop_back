@@ -21,7 +21,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpPost]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("read-admin-roles")]
         public async Task<IActionResult> GetRoles([FromBody] RolePermissionFilterRequest request)
         {
             var result = await _service.GetRolesAsync(request);
@@ -30,7 +30,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpGet("{id}")]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("read-admin-roles")]
         public async Task<IActionResult> GetRole(Guid id)
         {
             var role = await _service.GetRoleAsync(id);
@@ -40,7 +40,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpGet("{id}/edit")]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("update-admin-roles")]
         public async Task<IActionResult> GetRoleForEdit(Guid id)
         {
             var role = await _service.GetRoleForEditAsync(id);
@@ -50,7 +50,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpPost("create")]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("create-admin-roles")]
         public async Task<IActionResult> Create([FromBody] CreateRoleRequest request)
         {
             var currentUserId = User?.FindFirst("UserId")?.Value 
@@ -61,7 +61,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpPut("{id}")]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("update-admin-roles")]
         public async Task<IActionResult> Update(Guid id, [FromBody] UpdateRoleRequest request)
         {
             var currentUserId = User?.FindFirst("UserId")?.Value 
@@ -72,7 +72,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpDelete("{id}")]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("delete-admin-roles")]
         public async Task<IActionResult> DeleteRole(Guid id, [FromQuery] bool permanent = false)
         {
             var currentUserId = User?.FindFirst("UserId")?.Value 
@@ -92,7 +92,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpPost("{id}/restore")]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("restore-admin-roles")]
         public async Task<IActionResult> RestoreRole(Guid id)
         {
             var currentUserId = User?.FindFirst("UserId")?.Value 
@@ -107,7 +107,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpGet("{id}/delete-info")]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("restore-admin-roles")]
         public async Task<IActionResult> GetDeleteInfo(Guid id)
         {
             var result = await _service.CheckDeleteEligibilityAsync(id);

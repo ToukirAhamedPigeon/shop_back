@@ -22,7 +22,7 @@ namespace shop_back.src.Shared.Api.Controllers
 
         [Authorize]
         [HttpGet]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("read-admin-user-table-combination")]
         public async Task<IActionResult> Get([FromQuery] string tableId, [FromQuery] Guid userId)
         {
             // Console.WriteLine("tableId: " + tableId);
@@ -36,7 +36,7 @@ namespace shop_back.src.Shared.Api.Controllers
 
         [Authorize]
         [HttpPut]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("update-admin-user-table-combination")]
         public async Task<IActionResult> Put([FromBody] UserTableCombinationDTO dto)
         {
             if (dto.UserId == Guid.Empty || string.IsNullOrEmpty(dto.TableId))

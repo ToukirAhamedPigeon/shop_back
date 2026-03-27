@@ -23,7 +23,7 @@ namespace shop_back.src.Shared.API.Controllers
         /// </summary>
         [Authorize]
         [HttpPost("{type}")]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("read-admin-options")]
         public async Task<IActionResult> GetOptions(string type, [FromBody] SelectRequestDto? req = null)
         {
             req ??= new SelectRequestDto();

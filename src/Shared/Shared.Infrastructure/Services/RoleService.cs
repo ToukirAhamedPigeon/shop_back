@@ -72,30 +72,40 @@ namespace shop_back.src.Shared.Infrastructure.Services
             if (string.IsNullOrWhiteSpace(request.Names))
                 return (false, "Role names are required");
             
-            // Parse multiple role names separated by "="
-            var roleNames = request.Names.Split('=', StringSplitOptions.RemoveEmptyEntries)
-                .Select(n => n.Trim())
-                .Where(n => !string.IsNullOrWhiteSpace(n))
-                .Distinct()
-                .ToList();
+            // Parse multiple role names separated by "=" AND expand any shorthand patterns
+            var roleNames = NameExpander.ExpandNames(request.Names);
             
             if (!roleNames.Any())
                 return (false, "At least one valid role name is required");
             
-            // Check for duplicates in request
+            // Check for duplicates in request (after expansion)
             if (roleNames.Count != roleNames.Distinct().Count())
                 return (false, "Duplicate role names found in request");
             
             // Check for existing roles
             var existingRoles = new List<string>();
+            var validRoles = new List<string>();
+            
             foreach (var roleName in roleNames)
             {
                 if (await _repo.RoleExistsAsync(roleName))
+                {
                     existingRoles.Add(roleName);
+                }
+                else
+                {
+                    validRoles.Add(roleName);
+                }
             }
             
             if (existingRoles.Any())
-                return (false, $"Role(s) already exist: {string.Join(", ", existingRoles)}");
+            {
+                if (!validRoles.Any())
+                {
+                    return (false, $"Role(s) already exist: {string.Join(", ", existingRoles)}");
+                }
+                // If some roles exist and some don't, continue with valid ones
+            }
             
             // Parse IsActive
             bool isActive = string.Equals(request.IsActive, "true", StringComparison.OrdinalIgnoreCase);
@@ -111,7 +121,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
             {
                 var createdRoles = new List<Role>();
                 
-                foreach (var roleName in roleNames)
+                foreach (var roleName in validRoles)
                 {
                     var role = new Role
                     {
@@ -129,10 +139,11 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     await _repo.CreateRoleAsync(role);
                     createdRoles.Add(role);
                     
-                    // Assign permissions if provided
+                    // Assign permissions if provided (also expand permission names)
                     if (request.Permissions.Any())
                     {
-                        await _repo.AssignPermissionsToRoleAsync(role.Id, request.Permissions);
+                        var expandedPermissions = NameExpander.ExpandPermissionNames(request.Permissions);
+                        await _repo.AssignPermissionsToRoleAsync(role.Id, expandedPermissions);
                     }
                 }
                 
@@ -150,7 +161,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 await _userLogHelper.LogAsync(
                     userId: createdByGuid ?? Guid.Empty,
                     actionType: "Create",
-                    detail: $"{roleNames.Count} role(s) created: {string.Join(", ", roleNames)}",
+                    detail: $"{createdRoles.Count} role(s) created: {string.Join(", ", createdRoles.Select(r => r.Name))}" + 
+                            (existingRoles.Any() ? $" (Skipped existing: {string.Join(", ", existingRoles)})" : ""),
                     changes: changesJson,
                     modelName: "Role",
                     modelId: createdRoles.First().Id
@@ -158,7 +170,11 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 
                 await transaction.CommitAsync();
                 
-                return (true, $"{roleNames.Count} role(s) created successfully");
+                var message = $"{createdRoles.Count} role(s) created successfully";
+                if (existingRoles.Any())
+                    message += $" (Skipped existing: {string.Join(", ", existingRoles)})";
+                
+                return (true, message);
             }
             catch (Exception ex)
             {

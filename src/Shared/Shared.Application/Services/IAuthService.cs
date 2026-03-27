@@ -1,5 +1,6 @@
 using shop_back.src.Shared.Application.DTOs;
 using shop_back.src.Shared.Application.DTOs.Auth;
+using shop_back.src.Shared.Application.DTOs.Users;
 
 namespace shop_back.src.Shared.Application.Services
 {

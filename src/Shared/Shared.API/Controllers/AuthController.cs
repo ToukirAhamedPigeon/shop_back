@@ -4,6 +4,7 @@ using shop_back.src.Shared.Application.DTOs.Auth;
 using shop_back.src.Shared.Application.Services;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using shop_back.src.Shared.Infrastructure.Services.Authorization;
 using System.Text.Json;
 
 namespace shop_back.src.Shared.API.Controllers
@@ -19,11 +20,14 @@ namespace shop_back.src.Shared.API.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
+        private readonly IUserService _userService;
 
-        public AuthController(IAuthService authService)
+        public AuthController(IAuthService authService, IUserService userService)
         {
             _authService = authService;
+            _userService = userService;
         }
+
 
         /// <summary>
         /// Authenticates a user with credentials and issues JWT + Refresh Token.
@@ -95,11 +99,33 @@ namespace shop_back.src.Shared.API.Controllers
             });
         }
 
+         /// <summary>
+        /// Returns the current authenticated user
+        /// GET /api/auth/me
+        /// </summary>
+        [Authorize]
+        [HttpGet("me")]
+        [HasPermissionAny("read-admin-auth")]
+        public async Task<IActionResult> Me()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var userGuid))
+                return Unauthorized(new { message = "Unauthenticated" });
+
+            var user = await _userService.GetUserAsync(userGuid);
+            if (user == null)
+                return NotFound(new { message = "User not found" });
+
+            return Ok(new { user });
+        }
+
+
         /// <summary>
         /// Logs out the current device (revokes the refresh token in cookie).
         /// </summary>
         [Authorize]
         [HttpPost("logout")]
+        [HasPermissionAny("logout-admin-auth")]
         public async Task<IActionResult> Logout()
         {
             if (Request.Cookies.TryGetValue("refreshToken", out var refreshToken))
@@ -116,6 +142,7 @@ namespace shop_back.src.Shared.API.Controllers
         /// </summary>
         [Authorize]
         [HttpPost("logout-all")]
+        [HasPermissionAny("logout-all-admin-auth")]
         public async Task<IActionResult> LogoutAll()
         {
             var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -129,6 +156,7 @@ namespace shop_back.src.Shared.API.Controllers
         /// </summary>
         [Authorize]
         [HttpPost("logout-others")]
+        [HasPermissionAny("logout-others-admin-auth")]
         public async Task<IActionResult> LogoutOthers()
         {
             if (Request.Cookies.TryGetValue("refreshToken", out var refreshToken))

@@ -22,7 +22,7 @@ namespace shop_back.src.Shared.API.Controllers
         /// </summary>
         [Authorize]
         [HttpPost("check-unique")]
-        [HasPermissionAny("read-admin-dashboard")]
+        [HasPermissionAny("check-admin-unique")]
         public async Task<IActionResult> CheckUnique([FromBody] CheckUniqueRequest request)
         {
             var exists = await _service.ExistsAsync(request);
