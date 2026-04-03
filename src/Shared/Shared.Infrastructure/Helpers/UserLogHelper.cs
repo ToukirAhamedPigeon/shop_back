@@ -120,6 +120,12 @@ namespace shop_back.src.Shared.Infrastructure.Helpers
                 .RemoteIpAddress?
                 .ToString();
         }
+        public Guid GetGuidFromLong(long id)
+        {
+            byte[] bytes = new byte[16];
+            BitConverter.GetBytes(id).CopyTo(bytes, 0);
+            return new Guid(bytes);
+        }
     }
 
     public static class UserAgentParser

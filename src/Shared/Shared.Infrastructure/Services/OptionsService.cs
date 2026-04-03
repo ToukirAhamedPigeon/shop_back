@@ -12,6 +12,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
         private readonly IUserLogRepository _userLogRepository;
         private readonly IUserRepository _userRepository;
         private readonly IRolePermissionRepository _rolePermissionRepository;
+        private readonly ITranslationService _translationService;
         private readonly IDatabase _cache;
         private readonly TimeSpan _cacheTtl = TimeSpan.FromHours(1);
 
@@ -19,11 +20,13 @@ namespace shop_back.src.Shared.Infrastructure.Services
             IUserLogRepository userLogRepository, 
             IUserRepository userRepository, 
             IRolePermissionRepository rolePermissionRepository,
+            ITranslationService translationService,
             IConnectionMultiplexer redis)
         {
             _userLogRepository = userLogRepository;
             _userRepository = userRepository;
             _rolePermissionRepository = rolePermissionRepository;
+            _translationService = translationService;
             _cache = redis.GetDatabase();
         }
 
@@ -105,6 +108,12 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     // Console.WriteLine("Calling _rolePermissionRepository.GetAllPermissionsAsync");
                     var permissions = await _rolePermissionRepository.GetAllPermissionsAsync();
                     result = permissions.Select(p => new SelectOptionDto { Value = p, Label = p }).ToList();
+                    break;
+
+                case "translationmodules":
+                    // Console.WriteLine("Calling _translationRepository.GetDistinctModulesAsync");
+                    var translationModules = await _translationService.GetModulesForOptionsAsync();
+                    result = translationModules.ToList();
                     break;
                     
                 default:
