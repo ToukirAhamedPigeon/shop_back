@@ -232,6 +232,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
             return new UserDto
             {
                 Id = user.Id,
+                Name = user.Name,
                 Username = user.Username,
                 Email = user.Email,
                 EmailVerifiedAt = user.EmailVerifiedAt,
