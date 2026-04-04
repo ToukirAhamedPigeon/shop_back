@@ -10,6 +10,7 @@ using shop_back.src.Shared.Infrastructure.Middlewares;
 using shop_back.src.Shared.Infrastructure.Services.Authorization;
 using StackExchange.Redis;
 using System.IdentityModel.Tokens.Jwt;
+using shop_back.src.Shared.Infrastructure.Helpers;
 
 try { Env.Load(); } catch { }
 
@@ -31,10 +32,26 @@ var redisConn = Env.GetString("RedisConnectionString");
 var multiplexer = ConnectionMultiplexer.Connect(redisConn);
 builder.Services.AddSingleton<IConnectionMultiplexer>(multiplexer);
 
+// ------------------- HTTP CLIENT FOR REMOTE STORAGE -------------------
+builder.Services.AddHttpClient();
+
 // ------------------- REPOSITORIES & SERVICES -------------------
 builder.Services.AddSettings(builder.Configuration);
 builder.Services.AddRepositories();
 builder.Services.AddServices();
+
+// ------------------- FILE STORAGE HELPERS -------------------
+// Register as Singleton instead of Scoped
+builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+{
+    ["FILE_STORAGE_TYPE"] = Env.GetString("FILE_STORAGE_TYPE") ?? "remote",
+    ["REMOTE_STORAGE_URL"] = Env.GetString("REMOTE_STORAGE_URL") ?? "https://shopfiles.pigeonic.com",
+    ["REMOTE_STORAGE_TOKEN"] = Env.GetString("REMOTE_STORAGE_TOKEN") ?? ""
+});
+
+// ডিবাগ
+Console.WriteLine($"After manual add - FILE_STORAGE_TYPE: {builder.Configuration["FILE_STORAGE_TYPE"]}");
+builder.Services.AddSingleton<RemoteFileHelper>();
 
 // ------------------- JWT AUTHENTICATION -------------------
 var key = Encoding.UTF8.GetBytes(Env.GetString("JwtKey")!);
@@ -98,8 +115,22 @@ builder.Services.AddCors(p =>
             .AllowCredentials();
     });
 });
+// কনফিগারেশন চেক করুন
+var fileStorageType = builder.Configuration["FILE_STORAGE_TYPE"];
+var remoteUrl = builder.Configuration["REMOTE_STORAGE_URL"];
+Console.WriteLine($"=== CONFIGURATION CHECK ===");
+Console.WriteLine($"FILE_STORAGE_TYPE from config: '{fileStorageType}'");
+Console.WriteLine($"REMOTE_STORAGE_URL from config: '{remoteUrl}'");
 
+// এনভায়রনমেন্ট ভেরিয়েবল থেকেও চেক করুন
+var envStorageType = Environment.GetEnvironmentVariable("FILE_STORAGE_TYPE");
+Console.WriteLine($"FILE_STORAGE_TYPE from env: '{envStorageType}'");
 var app = builder.Build();
+
+// ------------------- INITIALIZE FILE HELPER WITH REMOTE STORAGE -------------------
+// Get the service directly (now works because it's Singleton)
+var remoteFileHelper = app.Services.GetRequiredService<RemoteFileHelper>();
+FileHelper.Initialize(remoteFileHelper);
 
 #if !DEBUG
 app.UseHttpsRedirection();

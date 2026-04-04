@@ -13,8 +13,6 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using shop_back.src.Shared.Infrastructure.Data;
 
-
-
 namespace shop_back.src.Shared.Infrastructure.Services
 {
     public class UserService : IUserService
@@ -55,48 +53,30 @@ namespace shop_back.src.Shared.Infrastructure.Services
             var user = await _repo.GetByIdAsync(id);
             if (user == null) return null;
 
-            // 🔐 Fetch roles & permissions
-            var roles = await _rolePermissionRepo
-                .GetRoleNamesByUserIdAsync(user.Id) ?? Array.Empty<string>();
-
-            var permissions = await _rolePermissionRepo
-                .GetAllPermissionsByUserIdAsync(user.Id) ?? Array.Empty<string>();
+            var roles = await _rolePermissionRepo.GetRoleNamesByUserIdAsync(user.Id) ?? Array.Empty<string>();
+            var permissions = await _rolePermissionRepo.GetAllPermissionsByUserIdAsync(user.Id) ?? Array.Empty<string>();
 
             return new UserDto
             {
                 Id = user.Id,
-
-                // Identity
                 Name = user.Name,
                 Username = user.Username,
                 Email = user.Email,
                 EmailVerifiedAt = user.EmailVerifiedAt,
                 MobileNo = user.MobileNo,
-
-                // Profile
                 ProfileImage = user.ProfileImage,
                 Bio = user.Bio,
                 DateOfBirth = user.DateOfBirth,
                 Gender = user.Gender,
                 Address = user.Address,
-
-                // QR
                 QRCode = user.QRCode,
-
-                // Preferences
                 Timezone = user.Timezone,
                 NID = user.NID,
-                        Language = user.Language,
-
-                // Status
+                Language = user.Language,
                 IsActive = user.IsActive,
                 IsDeleted = user.IsDeleted,
-
-                // Audit
                 CreatedAt = user.CreatedAt,
                 UpdatedAt = user.UpdatedAt,
-
-                // 🔥 Authorization
                 Roles = roles,
                 Permissions = permissions
             };
@@ -111,7 +91,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
             var allPermissions = await _rolePermissionRepo.GetAllPermissionsByUserIdAsync(user.Id) ?? Array.Empty<string>();
             var rolePermissions = await _rolePermissionRepo.GetPermissionsByRolesAsync(roles) ?? Array.Empty<string>();
 
-            // Only direct permissions for Edit form
             var directPermissions = allPermissions.Except(rolePermissions).ToArray();
 
             return new UserDto
@@ -178,8 +157,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 return (false, "Username already exists");
             if (await _repo.GetByEmailAsync(request.Email) != null)
                 return (false, "Email already exists");
-            // if (!string.IsNullOrEmpty(request.MobileNo) && await _repo.GetByMobileNoAsync(request.MobileNo) != null)
-            //     return (false, "Mobile number already exists");
             if (!string.IsNullOrEmpty(request.NID) && await _repo.GetByIdentifierAsync(request.NID) != null)
                 return (false, "NID already exists");
 
@@ -216,27 +193,29 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     UpdatedAt = DateTime.UtcNow
                 };
 
-                // 🔹 8️⃣ Handle profile image (service layer)
+                // 🔹 8️⃣ Handle profile image using FileHelper with resizing
                 if (request.ProfileImage != null)
                 {
-                    if (request.ProfileImage.Length > 5 * 1024 * 1024)
-                        return (false, "Profile image must be less than 5MB");
-
-                    var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp" };
-                    if (!allowedTypes.Contains(request.ProfileImage.ContentType))
-                        return (false, "Only JPG, PNG, WEBP images are allowed");
-
-                    var uploadPath = Path.Combine("wwwroot", "uploads", "users");
-                    Directory.CreateDirectory(uploadPath);
-
-                    var fileName = $"{Guid.NewGuid()}.png";
-                    var fullPath = Path.Combine(uploadPath, fileName);
-
-                    using var image = await Image.LoadAsync(request.ProfileImage.OpenReadStream());
-                    image.Mutate(x => x.Resize(1000, 1000));
-                    await image.SaveAsPngAsync(fullPath);
-
-                    user.ProfileImage = $"/uploads/users/{fileName}";
+                    try
+                    {
+                        var resizeOptions = new ImageResizeOptions
+                        {
+                            Enabled = true,
+                            MaxWidth = 500,
+                            MaxHeight = 500,
+                            ResizeMode = ImageResizeMode.Max
+                        };
+                        
+                        user.ProfileImage = await FileHelper.SaveFileAsync(
+                            request.ProfileImage, 
+                            "users", 
+                            resizeOptions
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        return (false, $"Profile image upload failed: {ex.Message}");
+                    }
                 }
 
                 // 🔹 9️⃣ Generate QR code
@@ -304,9 +283,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         private static string GenerateQRCodeString(Guid userId)
         {
-            // Combine User ID, UTC timestamp, and a random 4-character string
-            var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"); // precise milliseconds
-            var random = Path.GetRandomFileName().Replace(".", "").Substring(0, 4); // short random string
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
+            var random = Path.GetRandomFileName().Replace(".", "").Substring(0, 4);
             return $"{userId:N}-{timestamp}-{random}";
         }
 
@@ -323,9 +301,9 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
             await _repo.SaveChangesAsync();
 
-            // Return fresh DTO
             return await GetUserAsync(id);
         }
+        
         public async Task<(bool Success, string Message)> UpdateUserAsync(
             Guid id,
             UpdateUserRequest request,
@@ -356,10 +334,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
             // 5️⃣ Update basic fields
             user.Name = request.Name;
             user.Username = request.Username;
-            user.Email = request.Email; // Set once here
+            user.Email = request.Email;
             user.IsActive = string.Equals(request.IsActive, "true", StringComparison.OrdinalIgnoreCase);
-            
-            // Update other fields as needed
             user.MobileNo = request.MobileNo;
             user.NID = request.NID;
             user.Address = request.Address;
@@ -367,30 +343,33 @@ namespace shop_back.src.Shared.Infrastructure.Services
             // 6️⃣ Handle ProfileImage
             if (request.RemoveProfileImage)
             {
-                // Delete existing profile image if it exists
                 if (!string.IsNullOrEmpty(user.ProfileImage))
                 {
-                    var oldImagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", user.ProfileImage.TrimStart('/'));
-                    if (File.Exists(oldImagePath))
-                        File.Delete(oldImagePath);
-                    
+                    await FileHelper.DeleteFileAsync(user.ProfileImage);
                     user.ProfileImage = null;
                 }
             }
             else if (request.ProfileImage != null)
             {
-                // Delete old image if it exists
                 if (!string.IsNullOrEmpty(user.ProfileImage))
                 {
-                    var oldImagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", user.ProfileImage.TrimStart('/'));
-                    if (File.Exists(oldImagePath))
-                        File.Delete(oldImagePath);
+                    await FileHelper.DeleteFileAsync(user.ProfileImage);
                 }
                 
-                // Save new image
-                user.ProfileImage = await FileHelper.SaveFileAsync(request.ProfileImage);
+                var resizeOptions = new ImageResizeOptions
+                {
+                    Enabled = true,
+                    MaxWidth = 500,
+                    MaxHeight = 500,
+                    ResizeMode = ImageResizeMode.Max
+                };
+                
+                user.ProfileImage = await FileHelper.SaveFileAsync(
+                    request.ProfileImage, 
+                    "users", 
+                    resizeOptions
+                );
             }
-            // If neither flag is set, keep existing image
 
             // 7️⃣ Update roles and permissions
             await _rolePermissionRepo.SetRolesForUserAsync(user.Id, request.Roles);
@@ -406,7 +385,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
             if (emailChanged)
             {
                 user.EmailVerifiedAt = null;
-                // Send verification email (the service will generate its own token)
                 await _mailVerificationService.SendVerificationEmailAsync(user);
             }
 
@@ -423,19 +401,15 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
             return (true, "User updated successfully");
         }
+        
         public async Task<UserDto?> GetProfileAsync(Guid userId)
         {
             var user = await _repo.GetByIdAsync(userId);
             if (user == null) return null;
 
-            var roles = await _rolePermissionRepo
-                .GetRoleNamesByUserIdAsync(user.Id) ?? Array.Empty<string>();
+            var roles = await _rolePermissionRepo.GetRoleNamesByUserIdAsync(user.Id) ?? Array.Empty<string>();
+            var permissions = await _rolePermissionRepo.GetAllPermissionsByUserIdAsync(user.Id) ?? Array.Empty<string>();
 
-            var permissions = await _rolePermissionRepo
-                .GetAllPermissionsByUserIdAsync(user.Id) ?? Array.Empty<string>();
-            // Console.WriteLine($"Roles: {string.Join(", ", roles)}");
-            // Console.WriteLine($"Permissions: {string.Join(", ", permissions)}");
-            // For profile view, we don't need roles/permissions
             return new UserDto
             {
                 Id = user.Id,
@@ -470,7 +444,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
             if (await _repo.ExistsByEmailAsync(request.Email, userId))
                 return (false, "Email already exists");
-            // 2️⃣ Validate mobile number uniqueness if changed
+            
             if (!string.IsNullOrEmpty(request.MobileNo) && 
                 request.MobileNo != user.MobileNo && 
                 await _repo.ExistsByMobileNoAsync(request.MobileNo, userId))
@@ -478,7 +452,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 return (false, "Mobile number already exists");
             }
 
-            // 3️⃣ Validate NID uniqueness if changed
             if (!string.IsNullOrEmpty(request.NID) && 
                 request.NID != user.NID && 
                 await _repo.ExistsByNIDAsync(request.NID, userId))
@@ -487,7 +460,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
             }
 
             bool emailChanged = !string.Equals(user.Email, request.Email, StringComparison.OrdinalIgnoreCase);
-            // 4️⃣ Update profile fields (only allowed fields)
+            
+            // 4️⃣ Update profile fields
             user.Name = request.Name;
             user.MobileNo = request.MobileNo;
             user.Email = request.Email;
@@ -500,41 +474,42 @@ namespace shop_back.src.Shared.Infrastructure.Services
             // 5️⃣ Handle Profile Image
             if (request.RemoveProfileImage)
             {
-                // Delete existing profile image if it exists
                 if (!string.IsNullOrEmpty(user.ProfileImage))
                 {
-                    var oldImagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", user.ProfileImage.TrimStart('/'));
-                    if (File.Exists(oldImagePath))
-                        File.Delete(oldImagePath);
-                    
+                    await FileHelper.DeleteFileAsync(user.ProfileImage);
                     user.ProfileImage = null;
                 }
             }
             else if (request.ProfileImage != null)
             {
-                // Delete old image if it exists
                 if (!string.IsNullOrEmpty(user.ProfileImage))
                 {
-                    var oldImagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", user.ProfileImage.TrimStart('/'));
-                    if (File.Exists(oldImagePath))
-                        File.Delete(oldImagePath);
+                    await FileHelper.DeleteFileAsync(user.ProfileImage);
                 }
                 
-                // Save new image using your existing FileHelper
-                user.ProfileImage = await FileHelper.SaveFileAsync(request.ProfileImage);
+                var resizeOptions = new ImageResizeOptions
+                {
+                    Enabled = true,
+                    MaxWidth = 500,
+                    MaxHeight = 500,
+                    ResizeMode = ImageResizeMode.Max
+                };
+                
+                user.ProfileImage = await FileHelper.SaveFileAsync(
+                    request.ProfileImage, 
+                    "users", 
+                    resizeOptions
+                );
             }
 
             if (emailChanged)
             {
                 user.EmailVerifiedAt = null;
-                // Send verification email (the service will generate its own token)
                 await _mailVerificationService.SendVerificationEmailAsync(user);
             }
 
             // 6️⃣ Audit fields
             user.UpdatedAt = DateTime.UtcNow;
-            // Note: We don't change UpdatedBy for self-profile updates
-            // as it's the user themselves
 
             // 7️⃣ Save changes
             await _repo.UpdateAsync(user);
@@ -550,7 +525,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
             try
             {
                 var result = await _changePasswordService.RequestChangePasswordAsync(userId, request);
-                return (true, result.Message); // result is ChangePasswordResponseDto
+                return (true, result.Message);
             }
             catch (Exception ex)
             {
@@ -571,57 +546,48 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 return (false, ex.Message);
             }
         }
+        
         public async Task<(bool Success, string Message, string DeleteType)> DeleteUserAsync(
             Guid id, 
             bool permanent, 
             string? currentUserId)
         {
-            // 1️⃣ Fetch user
             var user = await _repo.GetByIdAsync(id);
             if (user == null) 
                 return (false, "User not found", "none");
             
-            // 2️⃣ Parse current user ID
             Guid? deletedBy = null;
             if (!string.IsNullOrEmpty(currentUserId) && Guid.TryParse(currentUserId, out var parsed))
                 deletedBy = parsed;
             
-            // 3️⃣ Check if user is already deleted
             if (user.IsDeleted)
                 return (false, "User is already deleted", "none");
             
-            // 4️⃣ Determine delete type based on conditions
-            string deleteType = "soft"; // Default to soft delete
+            string deleteType = "soft";
             
             if (permanent)
             {
-                // Check if permanent deletion is possible
                 var hasRelatedRecords = await _repo.HasRelatedRecordsAsync(id);
                 var hasVerifiedEmail = await _repo.HasVerifiedEmailAsync(id);
                 
-                // If no related records AND email not verified, allow permanent delete
                 if (!hasRelatedRecords && !hasVerifiedEmail)
                 {
                     deleteType = "permanent";
                 }
                 else
                 {
-                    // Force soft delete if conditions not met
                     deleteType = "soft";
                 }
             }
             
-            // 5️⃣ Perform the deletion
             using var transaction = await _context.Database.BeginTransactionAsync();
             
             try
             {
                 if (deleteType == "permanent")
                 {
-                    // Permanent delete - remove user and all related records
                     await _repo.HardDeleteAsync(id);
                     
-                    // Log the action
                     await _userLogHelper.LogAsync(
                         userId: deletedBy ?? id,
                         actionType: "Delete",
@@ -635,10 +601,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 }
                 else
                 {
-                    // Soft delete - just mark as deleted
                     await _repo.SoftDeleteAsync(id, deletedBy);
                     
-                    // Log the action
                     await _userLogHelper.LogAsync(
                         userId: deletedBy ?? id,
                         actionType: "Delete",
@@ -666,19 +630,16 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         public async Task<(bool Success, string Message)> RestoreUserAsync(Guid id, string? currentUserId)
         {
-            // 1️⃣ Fetch user
             var user = await _context.Users.IgnoreQueryFilters()
                 .FirstOrDefaultAsync(u => u.Id == id && u.IsDeleted);
             
             if (user == null)
                 return (false, "User not found or not deleted");
             
-            // 2️⃣ Parse current user ID
             Guid? restoredBy = null;
             if (!string.IsNullOrEmpty(currentUserId) && Guid.TryParse(currentUserId, out var parsed))
                 restoredBy = parsed;
             
-            // 3️⃣ Restore the user
             user.IsDeleted = false;
             user.DeletedAt = null;
             user.UpdatedBy = restoredBy;
@@ -687,7 +648,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
             await _repo.UpdateAsync(user);
             await _repo.SaveChangesAsync();
             
-            // 4️⃣ Log the action
             await _userLogHelper.LogAsync(
                 userId: restoredBy ?? id,
                 actionType: "Restore",
