@@ -24,7 +24,7 @@ namespace shop_back.src.Shared.Domain.Entities
         public string Value { get; set; } = null!;
 
         [Column("created_at")]
-        public DateTimeOffset CreatedAt { get; set; }
+        public DateTime CreatedAt { get; set; }
 
         [ForeignKey(nameof(KeyId))]
         public TranslationKey Key { get; set; } = null!;

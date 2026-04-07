@@ -9,7 +9,11 @@ namespace shop_back.src.Shared.Application.DTOs.Translations
         public string Module { get; set; } = string.Empty;
         public string EnglishValue { get; set; } = string.Empty;
         public string BanglaValue { get; set; } = string.Empty;
-        public DateTimeOffset CreatedAt { get; set; }
-        public DateTimeOffset? UpdatedAt { get; set; }
+        public DateTime CreatedAt { get; set; }  // Changed from DateTimeOffset to DateTime
+        public DateTime? UpdatedAt { get; set; }  // Changed from DateTimeOffset to DateTime
+        public Guid? CreatedBy { get; set; }
+        public Guid? UpdatedBy { get; set; }
+        public string? CreatedByName { get; set; }
+        public string? UpdatedByName { get; set; }
     }
 }

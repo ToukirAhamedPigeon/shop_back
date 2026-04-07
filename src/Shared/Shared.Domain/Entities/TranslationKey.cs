@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace shop_back.src.Shared.Domain.Entities
 {
-     [Table("translation_keys", Schema = "public")]
+    [Table("translation_keys", Schema = "public")]
     public class TranslationKey
     {
         [Key]
@@ -22,7 +22,16 @@ namespace shop_back.src.Shared.Domain.Entities
         public string Module { get; set; } = "common";
 
         [Column("created_at")]
-        public DateTimeOffset CreatedAt { get; set; }
+        public DateTime CreatedAt { get; set; }
+
+        [Column("updated_at")]
+        public DateTime? UpdatedAt { get; set; }
+
+        [Column("created_by")]
+        public Guid? CreatedBy { get; set; }
+
+        [Column("updated_by")]
+        public Guid? UpdatedBy { get; set; }
 
         public ICollection<TranslationValue> Values { get; set; } = new List<TranslationValue>();
     }

@@ -181,6 +181,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
         private string GenerateJwtToken(User user)
         {
             var permissions = _rolePermissionRepo.GetAllPermissionsByUserIdAsync(user.Id).Result;
+            var roles = _rolePermissionRepo.GetRoleNamesByUserIdAsync(user.Id).Result;
+            
             var claimsList = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
@@ -190,9 +192,18 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 new Claim("mobile_no", user.MobileNo ?? string.Empty)
             };
 
+            // Add permissions as claims
             foreach (var permission in permissions)
             {
                 claimsList.Add(new Claim("permission", permission));
+            }
+            
+            // Add roles as claims - IMPORTANT: Use ClaimTypes.Role for role-based authorization
+            foreach (var role in roles)
+            {
+                claimsList.Add(new Claim(ClaimTypes.Role, role));
+                // Also add as "role" for compatibility
+                claimsList.Add(new Claim("role", role));
             }
 
             if (!string.IsNullOrEmpty(user.Timezone))

@@ -112,7 +112,7 @@ namespace shop_back.src.Shared.Application.Services
             try
             {
                 // Create translation
-                var translationKey = await _repo.CreateTranslationAsync(request, ct);
+                var translationKey = await _repo.CreateTranslationAsync(request, createdByGuid, ct);
 
                 // Clear cache for affected languages and modules
                 await ClearCacheForTranslationAsync(request.Module, ct);
@@ -158,6 +158,7 @@ namespace shop_back.src.Shared.Application.Services
             if (existing == null)
                 return (false, "Translation not found");
 
+            Console.WriteLine($"isDeveloper: {isDeveloper}");
             // Check if key is being changed and if user is developer
             if ((existing.Key != request.Key || existing.Module != request.Module) && !isDeveloper)
                 return (false, "Only Developer type users can edit translation keys");
@@ -188,7 +189,7 @@ namespace shop_back.src.Shared.Application.Services
             try
             {
                 // Update translation
-                await _repo.UpdateTranslationAsync(id, request, ct);
+                await _repo.UpdateTranslationAsync(id, request, updatedByGuid, ct);
 
                 // Clear cache for old and new modules
                 await ClearCacheForTranslationAsync(existing.Module, ct);

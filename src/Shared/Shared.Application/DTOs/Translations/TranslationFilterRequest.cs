@@ -10,8 +10,8 @@ namespace shop_back.src.Shared.Application.DTOs.Translations
         public int Limit { get; set; } = 10;
         public string SortBy { get; set; } = "createdAt";
         public string SortOrder { get; set; } = "desc";
-        public DateTimeOffset? StartDate { get; set; }
-        public DateTimeOffset? EndDate { get; set; }
+        public DateTime? StartDate { get; set; }  // Changed from DateTimeOffset to DateTime
+        public DateTime? EndDate { get; set; }    // Changed from DateTimeOffset to DateTime
         public List<string>? Modules { get; set; }
     }
 }

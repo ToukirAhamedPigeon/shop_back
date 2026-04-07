@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using shop_back.src.Shared.Application.DTOs.Translations;
 using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Infrastructure.Services.Authorization;
+using System.Security.Claims;
 
 namespace shop_back.src.Shared.API.Controllers
 {
@@ -107,9 +108,22 @@ namespace shop_back.src.Shared.API.Controllers
             var currentUserId = User?.FindFirst("UserId")?.Value 
                                 ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
             
-            // Check if user is developer (you may need to implement this check)
-            // For now, we'll pass false; you can add a claim check for developer role
-            bool isDeveloper = User?.IsInRole("Developer") ?? false;
+            // Check if user has Developer role - now roles are in the JWT
+            bool isDeveloper = User?.HasClaim(ClaimTypes.Role, "Developer") ?? false;
+            
+            // Also check if not found
+            if (!isDeveloper)
+            {
+                isDeveloper = User?.HasClaim("role", "Developer") ?? false;
+            }
+            
+            // Also check case-insensitive
+            if (!isDeveloper)
+            {
+                isDeveloper = User?.Claims
+                    .Where(c => c.Type == ClaimTypes.Role || c.Type == "role")
+                    .Any(c => c.Value.Equals("Developer", StringComparison.OrdinalIgnoreCase)) ?? false;
+            }
             
             var result = await _service.UpdateTranslationAsync(id, request, currentUserId, isDeveloper);
             

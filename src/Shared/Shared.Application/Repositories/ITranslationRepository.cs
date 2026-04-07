@@ -14,8 +14,8 @@ namespace shop_back.src.Shared.Application.Repositories
         Task<TranslationDto?> GetTranslationByIdAsync(long id, CancellationToken ct = default);
         Task<TranslationKey?> GetTranslationKeyWithValuesAsync(long id, CancellationToken ct = default);
         Task<bool> TranslationKeyExistsAsync(string module, string key, long? ignoreId = null, CancellationToken ct = default);
-        Task<TranslationKey> CreateTranslationAsync(CreateTranslationRequest request, CancellationToken ct = default);
-        Task UpdateTranslationAsync(long id, UpdateTranslationRequest request, CancellationToken ct = default);
+        Task<TranslationKey> CreateTranslationAsync(CreateTranslationRequest request, Guid? createdBy, CancellationToken ct = default);
+        Task UpdateTranslationAsync(long id, UpdateTranslationRequest request, Guid? updatedBy, CancellationToken ct = default);  // Changed to Task
         Task DeleteTranslationAsync(long id, CancellationToken ct = default);
         Task<List<string>> GetDistinctModulesAsync(CancellationToken ct = default);
     }
