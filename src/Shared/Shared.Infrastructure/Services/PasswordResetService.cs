@@ -138,7 +138,7 @@ public class PasswordResetService : IPasswordResetService
                 detail: "User successfully reset password.",
                 changes: changesJson,
                 modelName: "User",
-                modelId: user.Id
+                modelId: user.Id.ToString()
             );
         }
         catch (Exception ex)

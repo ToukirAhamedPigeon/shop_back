@@ -258,7 +258,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     detail: $"User '{user.Username}' was created",
                     changes: changesJson,
                     modelName: "User",
-                    modelId: user.Id
+                    modelId: user.Id.ToString()
                 );
 
                 // 🔹 13️⃣ Send verification email
@@ -596,7 +596,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                             before = new { user.Id, user.Username, user.Email },
                         }),
                         modelName: "User",
-                        modelId: id
+                        modelId: id.ToString()
                     );
                 }
                 else
@@ -612,7 +612,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                             after = new { IsDeleted = true, DeletedAt = DateTime.UtcNow }
                         }),
                         modelName: "User",
-                        modelId: id
+                        modelId: id.ToString()
                     );
                 }
                 
@@ -657,7 +657,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     after = new { IsDeleted = false }
                 }),
                 modelName: "User",
-                modelId: id
+                modelId: id.ToString()
             );
             
             return (true, "User restored successfully");

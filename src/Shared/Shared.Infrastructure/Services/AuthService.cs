@@ -81,7 +81,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 actionType: "Login",
                 detail: $"User '{user.Username}' logged in successfully.",
                 modelName: "User",
-                modelId: user.Id
+                modelId: user.Id.ToString()
             );
 
             return new AuthResponseDto
@@ -126,7 +126,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                         actionType: "Logout",
                         detail: $"User logged out successfully.",
                         modelName: "User",
-                        modelId: refreshToken.UserId
+                        modelId: refreshToken.UserId.ToString()
                     );
                 }
             }
@@ -148,7 +148,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     actionType: "LogoutAllDevices",
                     detail: "User logged out from all devices.",
                     modelName: "User",
-                    modelId: userId
+                    modelId: userId.ToString()
                 );
             }
             catch (Exception ex)
@@ -169,7 +169,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     actionType: "LogoutOtherDevices",
                     detail: "User logged out from other devices except current.",
                     modelName: "User",
-                    modelId: userId
+                    modelId: userId.ToString()
                 );
             }
             catch (Exception ex)

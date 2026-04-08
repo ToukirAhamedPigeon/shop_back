@@ -121,7 +121,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                         : $"Created new column combination for table: {dto.TableId}",
                     changes: changesJson,
                     modelName: "UserTableCombination",
-                    modelId: entity.Id
+                    modelId: entity.Id.ToString()
                 );
             }
             catch (Exception ex)

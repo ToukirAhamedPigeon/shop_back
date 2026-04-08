@@ -135,7 +135,7 @@ namespace shop_back.src.Shared.Application.Services
                     detail: $"Translation '{translationKey.Key}' created in module '{translationKey.Module}'",
                     changes: changesJson,
                     modelName: "Translation",
-                    modelId: _userLogHelper.GetGuidFromLong(translationKey.Id) 
+                    modelId: translationKey.Id.ToString()
                 );
 
                 return (true, "Translation created successfully");
@@ -214,8 +214,10 @@ namespace shop_back.src.Shared.Application.Services
                     detail: $"Translation '{request.Key}' updated in module '{request.Module}'",
                     changes: changesJson,
                     modelName: "Translation",
-                    modelId: _userLogHelper.GetGuidFromLong(id)
+                    modelId: id.ToString()
                 );
+
+
 
                 return (true, "Translation updated successfully");
             }
@@ -267,7 +269,7 @@ namespace shop_back.src.Shared.Application.Services
                     detail: $"Translation '{existing.Key}' deleted from module '{existing.Module}'",
                     changes: changesJson,
                     modelName: "Translation",
-                    modelId: _userLogHelper.GetGuidFromLong(id)
+                    modelId: id.ToString()
                 );
 
                 return (true, "Translation deleted successfully");

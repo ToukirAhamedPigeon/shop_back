@@ -165,7 +165,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                             (existingPermissions.Any() ? $" (Skipped existing: {string.Join(", ", existingPermissions)})" : ""),
                     changes: changesJson,
                     modelName: "Permission",
-                    modelId: createdPermissions.First().Id
+                    modelId: createdPermissions.First().Id.ToString()
                 );
                 
                 await transaction.CommitAsync();
@@ -247,7 +247,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     detail: $"Permission '{permission.Name}' was updated",
                     changes: changesJson,
                     modelName: "Permission",
-                    modelId: permission.Id
+                    modelId: permission.Id.ToString()
                 );
                 
                 await transaction.CommitAsync();
@@ -304,7 +304,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                         after = new { IsDeleted = true, DeletedAt = DateTime.UtcNow }
                     }),
                     modelName: "Permission",
-                    modelId: permission.Id
+                    modelId: permission.Id.ToString()
                 );
                 
                 await transaction.CommitAsync();
@@ -348,7 +348,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     after = new { IsDeleted = false }
                 }),
                 modelName: "Permission",
-                modelId: permission.Id
+                modelId: permission.Id.ToString()
             );
             
             return (true, "Permission restored successfully");

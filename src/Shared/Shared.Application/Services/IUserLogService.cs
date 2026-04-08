@@ -12,7 +12,7 @@ namespace shop_back.src.Shared.Application.Services
             string? detail = null,
             string? changes = null,
             string? modelName = null,
-            Guid? modelId = null,
+            string? modelId = null,
             string? ip = null,
             string? browser = null,
             string? device = null,

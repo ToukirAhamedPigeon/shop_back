@@ -9,7 +9,7 @@ namespace shop_back.src.Shared.Application.DTOs.UserLogs
         public string? Changes { get; set; }
         public string ActionType { get; set; } = string.Empty;
         public string ModelName { get; set; } = string.Empty;
-        public Guid? ModelId { get; set; }
+        public string? ModelId { get; set; }
         public string? CreatedByName { get; set; }
         public Guid CreatedBy { get; set; }
         public DateTime CreatedAt { get; set; }

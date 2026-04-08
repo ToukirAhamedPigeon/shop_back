@@ -217,7 +217,7 @@ public class ChangePasswordService : IChangePasswordService
                 detail: "User changed password via email verification",
                 changes: changesJson,
                 modelName: "User",
-                modelId: user.Id
+                modelId: user.Id.ToString()
             );
         }
         catch (Exception ex)

@@ -27,7 +27,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
             string? detail = null,
             string? changes = null,
             string? modelName = null,
-            Guid? modelId = null,
+            string? modelId = null,
             string? ip = null,
             string? browser = null,
             string? device = null,

@@ -25,7 +25,7 @@ namespace shop_back.src.Shared.Infrastructure.Helpers
             string? detail = null,
             object? changes = null,
             string? modelName = null,
-            Guid? modelId = null
+            string? modelId = null
         )
         {
             var http = _httpContextAccessor.HttpContext;
@@ -125,6 +125,12 @@ namespace shop_back.src.Shared.Infrastructure.Helpers
             byte[] bytes = new byte[16];
             BitConverter.GetBytes(id).CopyTo(bytes, 0);
             return new Guid(bytes);
+        }
+
+        // Add new method to convert any ID to string for logging
+        public string GetModelIdAsString(object? id)
+        {
+            return id?.ToString() ?? string.Empty;
         }
     }
 

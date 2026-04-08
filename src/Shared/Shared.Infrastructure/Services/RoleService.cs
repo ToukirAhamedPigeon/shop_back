@@ -165,7 +165,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                             (existingRoles.Any() ? $" (Skipped existing: {string.Join(", ", existingRoles)})" : ""),
                     changes: changesJson,
                     modelName: "Role",
-                    modelId: createdRoles.First().Id
+                    modelId: createdRoles.First().Id.ToString()
                 );
                 
                 await transaction.CommitAsync();
@@ -247,7 +247,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     detail: $"Role '{role.Name}' was updated",
                     changes: changesJson,
                     modelName: "Role",
-                    modelId: role.Id
+                    modelId: role.Id.ToString()
                 );
                 
                 await transaction.CommitAsync();
@@ -306,7 +306,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                         after = new { IsDeleted = true, DeletedAt = DateTime.UtcNow }
                     }),
                     modelName: "Role",
-                    modelId: role.Id
+                    modelId: role.Id.ToString()
                 );
                 
                 await transaction.CommitAsync();
@@ -350,7 +350,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     after = new { IsDeleted = false }
                 }),
                 modelName: "Role",
-                modelId: role.Id
+                modelId: role.Id.ToString()
             );
             
             return (true, "Role restored successfully");
