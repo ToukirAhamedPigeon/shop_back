@@ -25,6 +25,8 @@ namespace shop_back.src.Shared.Infrastructure.Data
         public DbSet<Mail> Mails { get; set; } = null!;
         public DbSet<MailVerification> MailVerifications { get; set; } = null!;
 
+        public DbSet<Option> Options { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -202,6 +204,19 @@ namespace shop_back.src.Shared.Infrastructure.Data
             modelBuilder.Entity<Permission>()
                 .Property(p => p.DeletedAt)
                 .HasColumnName("deleted_at");
+
+            modelBuilder.Entity<Option>()
+                .HasQueryFilter(o => !o.IsDeleted);
+
+            modelBuilder.Entity<Option>()
+                .HasIndex(o => new { o.Name, o.ParentId })
+                .IsUnique();
+
+            modelBuilder.Entity<Option>()
+                .HasOne(o => o.Parent)
+                .WithMany(o => o.Children)
+                .HasForeignKey(o => o.ParentId)
+                .OnDelete(DeleteBehavior.Restrict);
         }    
     }
 }
