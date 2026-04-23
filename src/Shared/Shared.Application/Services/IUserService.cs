@@ -1,3 +1,5 @@
+// src/Shared/Application/Services/IUserService.cs - Updated
+
 using shop_back.src.Shared.Application.DTOs.Auth;
 using shop_back.src.Shared.Application.DTOs.Users;
 
@@ -27,6 +29,7 @@ namespace shop_back.src.Shared.Application.Services
             Guid id, 
             string? currentUserId);
             
-        Task<(bool Success, string Message, bool CanBePermanent)> CheckDeleteEligibilityAsync(Guid id);
+        // NEW: Enhanced check with details
+        Task<DeleteEligibilityResponse> CheckDeleteEligibilityAsync(Guid id);
     }
 }

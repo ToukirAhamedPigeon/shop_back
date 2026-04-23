@@ -546,46 +546,127 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 return (false, ex.Message);
             }
         }
-        
-        public async Task<(bool Success, string Message, string DeleteType)> DeleteUserAsync(
+
+       public async Task<(bool Success, string Message, string DeleteType)> DeleteUserAsync(
             Guid id, 
             bool permanent, 
             string? currentUserId)
         {
-            var user = await _repo.GetByIdAsync(id);
+            // Use the new method that includes deleted users
+            var user = await _repo.GetByIdIncludingDeletedAsync(id);
             if (user == null) 
                 return (false, "User not found", "none");
+            
+            // Check if user has role "Developer" - cannot be deleted
+            var userRoles = await _rolePermissionRepo.GetRoleNamesByUserIdAsync(id);
+            if (userRoles.Contains("Developer", StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, "Cannot delete user with Developer role. Please remove the Developer role first.", "none");
+            }
             
             Guid? deletedBy = null;
             if (!string.IsNullOrEmpty(currentUserId) && Guid.TryParse(currentUserId, out var parsed))
                 deletedBy = parsed;
             
-            if (user.IsDeleted)
-                return (false, "User is already deleted", "none");
-            
             string deleteType = "soft";
+            List<ForeignKeyConstraint> blockingConstraints = new();
             
             if (permanent)
             {
-                var hasRelatedRecords = await _repo.HasRelatedRecordsAsync(id);
-                var hasVerifiedEmail = await _repo.HasVerifiedEmailAsync(id);
-                
-                if (!hasRelatedRecords && !hasVerifiedEmail)
+                if (user.IsDeleted)
                 {
                     deleteType = "permanent";
                 }
                 else
                 {
-                    deleteType = "soft";
+                    // Check only critical foreign key constraints
+                    var (hasRelatedRecords, details) = await _repo.HasRelatedRecordsWithDetailsAsync(id);
+                    var hasVerifiedEmail = await _repo.HasVerifiedEmailAsync(id);
+                    
+                    // Build detailed constraint information only for critical tables
+                    if (details.HasRefreshTokens)
+                    {
+                        blockingConstraints.Add(new ForeignKeyConstraint
+                        {
+                            TableName = "refresh_tokens",
+                            ColumnName = "user_id",
+                            ConstraintName = "refresh_tokens_user_id_fkey",
+                            RecordCount = details.RefreshTokensCount
+                        });
+                    }
+                    
+                    if (details.HasPasswordResets)
+                    {
+                        blockingConstraints.Add(new ForeignKeyConstraint
+                        {
+                            TableName = "password_resets",
+                            ColumnName = "user_id",
+                            ConstraintName = "password_resets_user_id_fkey",
+                            RecordCount = details.PasswordResetsCount
+                        });
+                    }
+                    
+                    if (details.HasUserTableCombinations)
+                    {
+                        blockingConstraints.Add(new ForeignKeyConstraint
+                        {
+                            TableName = "user_table_combinations",
+                            ColumnName = "user_id / updated_by",
+                            ConstraintName = "user_table_combinations_user_id_fkey",
+                            RecordCount = details.UserTableCombinationsCount
+                        });
+                    }
+                    
+                    if (hasVerifiedEmail)
+                    {
+                        blockingConstraints.Add(new ForeignKeyConstraint
+                        {
+                            TableName = "users",
+                            ColumnName = "email_verified_at",
+                            ConstraintName = "email_verification",
+                            RecordCount = 1
+                        });
+                    }
+                    
+                    if (!hasRelatedRecords && !hasVerifiedEmail)
+                    {
+                        deleteType = "permanent";
+                    }
+                    else
+                    {
+                        deleteType = "soft";
+                        
+                        var reasons = new List<string>();
+                        if (hasVerifiedEmail) reasons.Add("verified email");
+                        if (details.HasRefreshTokens) reasons.Add($"{details.RefreshTokensCount} refresh token(s)");
+                        if (details.HasPasswordResets) reasons.Add($"{details.PasswordResetsCount} password reset(s)");
+                        if (details.HasUserTableCombinations) reasons.Add($"{details.UserTableCombinationsCount} table combination(s)");
+                        
+                        await _userLogHelper.LogAsync(
+                            userId: deletedBy ?? id,
+                            actionType: "DeleteBlocked",
+                            detail: $"Permanent delete blocked for user '{user.Username}'. Related records: {string.Join(", ", reasons)}",
+                            changes: JsonConvert.SerializeObject(new { 
+                                userId = id,
+                                attemptedPermanent = true,
+                                reasons = reasons,
+                                blockingConstraints = blockingConstraints
+                            }),
+                            modelName: "User",
+                            modelId: id.ToString()
+                        );
+                    }
                 }
             }
             
+            // Use a single transaction for the entire operation
             using var transaction = await _context.Database.BeginTransactionAsync();
             
             try
             {
                 if (deleteType == "permanent")
                 {
+                    // HardDeleteAsync will NOT create its own transaction
                     await _repo.HardDeleteAsync(id);
                     
                     await _userLogHelper.LogAsync(
@@ -593,7 +674,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                         actionType: "Delete",
                         detail: $"User '{user.Username}' was permanently deleted",
                         changes: JsonConvert.SerializeObject(new { 
-                            before = new { user.Id, user.Username, user.Email },
+                            before = new { user.Id, user.Username, user.Email, user.Name, user.IsDeleted },
+                            deletedBy = deletedBy?.ToString()
                         }),
                         modelName: "User",
                         modelId: id.ToString()
@@ -601,7 +683,10 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 }
                 else
                 {
-                    await _repo.SoftDeleteAsync(id, deletedBy);
+                    if (!user.IsDeleted)
+                    {
+                        await _repo.SoftDeleteAsync(id, deletedBy);
+                    }
                     
                     await _userLogHelper.LogAsync(
                         userId: deletedBy ?? id,
@@ -609,22 +694,59 @@ namespace shop_back.src.Shared.Infrastructure.Services
                         detail: $"User '{user.Username}' was soft deleted",
                         changes: JsonConvert.SerializeObject(new { 
                             before = new { user.Id, user.Username, user.Email, IsDeleted = false },
-                            after = new { IsDeleted = true, DeletedAt = DateTime.UtcNow }
+                            after = new { IsDeleted = true, DeletedAt = DateTime.UtcNow, DeletedBy = deletedBy?.ToString() }
                         }),
                         modelName: "User",
                         modelId: id.ToString()
                     );
                 }
                 
+                // Save all changes at once
                 await _repo.SaveChangesAsync();
                 await transaction.CommitAsync();
                 
-                return (true, $"User {(deleteType == "permanent" ? "permanently" : "soft")} deleted successfully", deleteType);
+                string successMessage = deleteType == "permanent" 
+                    ? "User permanently deleted successfully" 
+                    : "User moved to trash successfully";
+                
+                return (true, successMessage, deleteType);
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                return (false, $"Error deleting user: {ex.Message}", "none");
+                
+                // Extract foreign key violation details
+                string errorMessage = ex.Message;
+                List<ForeignKeyConstraint> failedConstraints = new();
+                
+                if (ex.InnerException?.Message?.Contains("violates foreign key constraint") == true)
+                {
+                    var innerMessage = ex.InnerException.Message;
+                    if (innerMessage.Contains("refresh_tokens_user_id_fkey"))
+                    {
+                        failedConstraints.Add(new ForeignKeyConstraint
+                        {
+                            TableName = "refresh_tokens",
+                            ColumnName = "user_id",
+                            ConstraintName = "refresh_tokens_user_id_fkey",
+                            RecordCount = await _context.RefreshTokens.CountAsync(rt => rt.UserId == id)
+                        });
+                    }
+                    if (innerMessage.Contains("password_resets_user_id_fkey"))
+                    {
+                        failedConstraints.Add(new ForeignKeyConstraint
+                        {
+                            TableName = "password_resets",
+                            ColumnName = "user_id",
+                            ConstraintName = "password_resets_user_id_fkey",
+                            RecordCount = await _context.PasswordResets.CountAsync(pr => pr.UserId == id)
+                        });
+                    }
+                    
+                    errorMessage = $"Cannot delete user due to existing related records in: {string.Join(", ", failedConstraints.Select(c => c.TableName))}";
+                }
+                
+                return (false, errorMessage, "none");
             }
         }
 
@@ -654,7 +776,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 detail: $"User '{user.Username}' was restored",
                 changes: JsonConvert.SerializeObject(new { 
                     before = new { IsDeleted = true, DeletedAt = user.DeletedAt },
-                    after = new { IsDeleted = false }
+                    after = new { IsDeleted = false, RestoredBy = restoredBy?.ToString(), RestoredAt = DateTime.UtcNow }
                 }),
                 modelName: "User",
                 modelId: id.ToString()
@@ -663,24 +785,129 @@ namespace shop_back.src.Shared.Infrastructure.Services
             return (true, "User restored successfully");
         }
 
-        public async Task<(bool Success, string Message, bool CanBePermanent)> CheckDeleteEligibilityAsync(Guid id)
+        public async Task<DeleteEligibilityResponse> CheckDeleteEligibilityAsync(Guid id)
         {
-            var user = await _repo.GetByIdAsync(id);
+            var user = await _repo.GetByIdIncludingDeletedAsync(id);
             if (user == null)
-                return (false, "User not found", false);
+                return new DeleteEligibilityResponse 
+                { 
+                    Success = false, 
+                    Message = "User not found", 
+                    CanBePermanent = false 
+                };
             
             if (user.IsDeleted)
-                return (false, "User is already deleted", false);
+                return new DeleteEligibilityResponse 
+                { 
+                    Success = true, 
+                    Message = "User is in trash and can be permanently deleted", 
+                    CanBePermanent = true,
+                    HasRelatedRecords = false,
+                    HasVerifiedEmail = false
+                };
             
-            var hasRelatedRecords = await _repo.HasRelatedRecordsAsync(id);
+            var userRoles = await _rolePermissionRepo.GetRoleNamesByUserIdAsync(id);
+            if (userRoles.Contains("Developer", StringComparer.OrdinalIgnoreCase))
+            {
+                return new DeleteEligibilityResponse 
+                { 
+                    Success = true, 
+                    Message = "Cannot delete user with Developer role. Please remove the Developer role first.", 
+                    CanBePermanent = false,
+                    HasRelatedRecords = true
+                };
+            }
+            
+            var (hasRelatedRecords, details) = await _repo.HasRelatedRecordsWithDetailsAsync(id);
             var hasVerifiedEmail = await _repo.HasVerifiedEmailAsync(id);
             
             bool canBePermanent = !hasRelatedRecords && !hasVerifiedEmail;
-            string message = canBePermanent 
-                ? "User can be permanently deleted" 
-                : "User must be soft deleted due to existing related records";
             
-            return (true, message, canBePermanent);
+            List<ForeignKeyConstraint> blockingConstraints = new();
+            
+            if (details.HasUserLogs)
+            {
+                blockingConstraints.Add(new ForeignKeyConstraint
+                {
+                    TableName = "user_logs",
+                    ColumnName = "created_by",
+                    ConstraintName = "user_logs_created_by_fkey",
+                    RecordCount = details.UserLogsCount
+                });
+            }
+            
+            if (details.HasRefreshTokens)
+            {
+                blockingConstraints.Add(new ForeignKeyConstraint
+                {
+                    TableName = "refresh_tokens",
+                    ColumnName = "user_id",
+                    ConstraintName = "refresh_tokens_user_id_fkey",
+                    RecordCount = details.RefreshTokensCount
+                });
+            }
+            
+            if (details.HasPasswordResets)
+            {
+                blockingConstraints.Add(new ForeignKeyConstraint
+                {
+                    TableName = "password_resets",
+                    ColumnName = "user_id",
+                    ConstraintName = "password_resets_user_id_fkey",
+                    RecordCount = details.PasswordResetsCount
+                });
+            }
+            
+            if (details.HasUserTableCombinations)
+            {
+                blockingConstraints.Add(new ForeignKeyConstraint
+                {
+                    TableName = "user_table_combinations",
+                    ColumnName = "user_id / updated_by",
+                    ConstraintName = "user_table_combinations_user_id_fkey",
+                    RecordCount = details.UserTableCombinationsCount
+                });
+            }
+            
+            if (details.HasMails)
+            {
+                blockingConstraints.Add(new ForeignKeyConstraint
+                {
+                    TableName = "mails",
+                    ColumnName = "created_by",
+                    ConstraintName = "mail_created_by_fkey",
+                    RecordCount = details.MailsCount
+                });
+            }
+            
+            string message;
+            if (canBePermanent)
+            {
+                message = "User can be permanently deleted (no related records found)";
+            }
+            else
+            {
+                var reasons = new List<string>();
+                if (hasVerifiedEmail) reasons.Add("has verified email");
+                if (details.HasUserLogs) reasons.Add($"has {details.UserLogsCount} user log(s)");
+                if (details.HasRefreshTokens) reasons.Add($"has {details.RefreshTokensCount} refresh token(s)");
+                if (details.HasPasswordResets) reasons.Add($"has {details.PasswordResetsCount} password reset(s)");
+                if (details.HasUserTableCombinations) reasons.Add($"has {details.UserTableCombinationsCount} table combination(s)");
+                if (details.HasMails) reasons.Add($"has {details.MailsCount} mail(s)");
+                
+                message = $"User must be soft deleted because they: {string.Join(", ", reasons)}";
+            }
+            
+            return new DeleteEligibilityResponse
+            {
+                Success = true,
+                Message = message,
+                CanBePermanent = canBePermanent,
+                HasRelatedRecords = hasRelatedRecords,
+                HasVerifiedEmail = hasVerifiedEmail,
+                RelatedRecordsDetails = details,
+                BlockingConstraints = blockingConstraints
+            };
         }
     }
 }

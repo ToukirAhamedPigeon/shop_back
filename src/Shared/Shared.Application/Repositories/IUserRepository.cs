@@ -1,3 +1,5 @@
+// src/Shared/Application/Repositories/IUserRepository.cs
+
 using shop_back.src.Shared.Domain.Entities;
 using shop_back.src.Shared.Application.DTOs.Users;
 using shop_back.src.Shared.Application.DTOs.Common;
@@ -10,7 +12,7 @@ namespace shop_back.src.Shared.Application.Repositories
         Task<bool> ExistsByEmailAsync(string email);
         Task<bool> ExistsByMobileNoAsync(string mobileNo);
         Task<bool> ExistsByNIDAsync(string nid);
-        Task<User?> GetByIdentifierAsync(string identifier); // renamed for clarity
+        Task<User?> GetByIdentifierAsync(string identifier);
         Task<User?> GetByEmailAsync(string email);
         Task<User?> GetByMobileNoAsync(string mobileNo);
         Task<(
@@ -31,10 +33,21 @@ namespace shop_back.src.Shared.Application.Repositories
         Task<bool> ExistsByEmailAsync(string email, Guid ignoreId);
         Task<bool> ExistsByMobileNoAsync(string mobileNo, Guid ignoreId);
         Task<bool> ExistsByNIDAsync(string nid, Guid ignoreId);
+        
+        // Relation check methods
         Task<bool> HasRelatedRecordsAsync(Guid userId);
+        Task<(bool HasRecords, RelatedRecordsDetails Details)> HasRelatedRecordsWithDetailsAsync(Guid userId);
         Task<bool> HasVerifiedEmailAsync(Guid userId);
+        
+        // Delete methods
         Task HardDeleteAsync(Guid userId);
         Task SoftDeleteAsync(Guid userId, Guid? deletedBy);
         Task RestoreUserAsync(Guid userId, Guid? restoredBy);
+        
+        // Get user including deleted
+        Task<User?> GetByIdIncludingDeletedAsync(Guid id);
+        
+        // NEW: Profile image deletion method
+        Task DeleteUserProfileImageAsync(User user);
     }
 }

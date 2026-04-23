@@ -24,22 +24,204 @@ namespace shop_back.src.Shared.Infrastructure.Data
         public DbSet<TranslationValue> TranslationValues { get; set; } = null!;
         public DbSet<Mail> Mails { get; set; } = null!;
         public DbSet<MailVerification> MailVerifications { get; set; } = null!;
-
         public DbSet<Option> Options { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
-             modelBuilder.Entity<User>().HasQueryFilter(u => !u.IsDeleted);
+            // Global query filter for soft delete
+            modelBuilder.Entity<User>().HasQueryFilter(u => !u.IsDeleted);
+            modelBuilder.Entity<Option>().HasQueryFilter(o => !o.IsDeleted);
 
-             modelBuilder.Entity<MailVerification>()
+            // ============================================
+            // UserLog configurations with proper foreign keys
+            // ============================================
+            var userLog = modelBuilder.Entity<UserLog>();
+            userLog.ToTable("user_logs");
+            userLog.HasKey(x => x.Id);
+            userLog.Property(x => x.Changes).HasColumnType("jsonb");
+            userLog.Property(x => x.CreatedAt).HasColumnName("created_at");
+            userLog.Property(x => x.CreatedAtId).HasColumnName("created_at_id");
+            userLog.Property(x => x.CreatedBy).HasColumnName("created_by");
+            userLog.Property(x => x.ActionType).HasColumnName("action_type");
+            userLog.Property(x => x.ModelName).HasColumnName("model_name");
+            userLog.Property(x => x.ModelId).HasColumnName("model_id");
+            userLog.Property(x => x.Detail).HasColumnName("detail");
+            userLog.Property(x => x.IpAddress).HasColumnName("ip_address");
+            userLog.Property(x => x.Browser).HasColumnName("browser");
+            userLog.Property(x => x.Device).HasColumnName("device");
+            userLog.Property(x => x.OperatingSystem).HasColumnName("os");
+            userLog.Property(x => x.UserAgent).HasColumnName("user_agent");
+
+            // Configure UserLog foreign key with Cascade Delete
+            userLog.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(ul => ul.CreatedBy)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // ============================================
+            // RefreshToken configuration
+            // ============================================
+            modelBuilder.Entity<RefreshToken>()
+                .HasOne(r => r.User)
+                .WithMany(u => u.RefreshTokens)
+                .HasForeignKey(r => r.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // ============================================
+            // PasswordReset configuration
+            // ============================================
+            modelBuilder.Entity<PasswordReset>()
+                .HasOne(p => p.User)
+                .WithMany()
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // ============================================
+            // MailVerification configuration
+            // ============================================
+            modelBuilder.Entity<MailVerification>()
                 .HasOne(m => m.User)
                 .WithMany()
                 .HasForeignKey(m => m.UserId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .IsRequired(false);
+                .OnDelete(DeleteBehavior.Cascade);
 
+            // ============================================
+            // Mail configuration
+            // ============================================
+            modelBuilder.Entity<Mail>()
+                .HasOne(m => m.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(m => m.CreatedBy)
+                .OnDelete(DeleteBehavior.SetNull); 
+
+            // ============================================
+            // ModelRole configuration
+            // ============================================
+            modelBuilder.Entity<ModelRole>()
+                .HasOne(mr => mr.Role)
+                .WithMany(r => r.ModelRoles)
+                .HasForeignKey(mr => mr.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // ============================================
+            // ModelPermission configuration
+            // ============================================
+            modelBuilder.Entity<ModelPermission>()
+                .HasOne(mp => mp.Permission)
+                .WithMany(p => p.ModelPermissions)
+                .HasForeignKey(mp => mp.PermissionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // ============================================
+            // RolePermission configuration
+            // ============================================
+            modelBuilder.Entity<RolePermission>()
+                .HasOne(rp => rp.Role)
+                .WithMany(r => r.RolePermissions)
+                .HasForeignKey(rp => rp.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<RolePermission>()
+                .HasOne(rp => rp.Permission)
+                .WithMany(p => p.RolePermissions)
+                .HasForeignKey(rp => rp.PermissionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // ============================================
+            // Role unique constraint
+            // ============================================
+            modelBuilder.Entity<Role>()
+                .HasIndex(r => new { r.Name, r.GuardName })
+                .IsUnique();
+
+            // ============================================
+            // Permission unique constraint
+            // ============================================
+            modelBuilder.Entity<Permission>()
+                .HasIndex(p => new { p.Name, p.GuardName })
+                .IsUnique();
+
+            // ============================================
+            // Translation configurations
+            // ============================================
+            modelBuilder.Entity<TranslationKey>()
+                .HasIndex(k => new { k.Module, k.Key })
+                .IsUnique();
+
+            modelBuilder.Entity<TranslationValue>()
+                .HasIndex(v => new { v.KeyId, v.Lang })
+                .IsUnique();
+
+            modelBuilder.Entity<TranslationValue>()
+                .HasOne(v => v.Key)
+                .WithMany(k => k.Values)
+                .HasForeignKey(v => v.KeyId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // ============================================
+            // Otp configuration
+            // ============================================
+            modelBuilder.Entity<Otp>()
+                .HasOne(o => o.User)
+                .WithMany()
+                .HasForeignKey(o => o.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // ============================================
+            // UserTableCombination configuration
+            // ============================================
+            modelBuilder.Entity<UserTableCombination>()
+                .Property(e => e.ShowColumnCombinations)
+                .HasColumnType("text[]");
+
+            // ============================================
+            // Audit field mappings for Role
+            // ============================================
+            modelBuilder.Entity<Role>()
+                .Property(r => r.CreatedBy)
+                .HasColumnName("created_by");
+
+            modelBuilder.Entity<Role>()
+                .Property(r => r.UpdatedBy)
+                .HasColumnName("updated_by");
+
+            modelBuilder.Entity<Role>()
+                .Property(r => r.DeletedAt)
+                .HasColumnName("deleted_at");
+
+            // ============================================
+            // Audit field mappings for Permission
+            // ============================================
+            modelBuilder.Entity<Permission>()
+                .Property(p => p.CreatedBy)
+                .HasColumnName("created_by");
+
+            modelBuilder.Entity<Permission>()
+                .Property(p => p.UpdatedBy)
+                .HasColumnName("updated_by");
+
+            modelBuilder.Entity<Permission>()
+                .Property(p => p.DeletedAt)
+                .HasColumnName("deleted_at");
+
+            // ============================================
+            // Option configuration
+            // ============================================
+            modelBuilder.Entity<Option>()
+                .HasIndex(o => new { o.Name, o.ParentId })
+                .IsUnique();
+
+            modelBuilder.Entity<Option>()
+                .HasOne(o => o.Parent)
+                .WithMany(o => o.Children)
+                .HasForeignKey(o => o.ParentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // ============================================
+            // DateTime conversion to UTC for all DateTime properties
+            // ============================================
             foreach (var entityType in modelBuilder.Model.GetEntityTypes())
             {
                 foreach (var property in entityType.GetProperties())
@@ -62,161 +244,6 @@ namespace shop_back.src.Shared.Infrastructure.Data
                     }
                 }
             }
-
-            // ✅ No HasConversion needed for bool <-> PostgreSQL boolean
-
-            // -------------------------------------------
-            // ✅ USERLOG table (jsonb column)
-            // -------------------------------------------
-            var userLog = modelBuilder.Entity<UserLog>();
-
-            userLog.ToTable("user_logs");
-
-            userLog.HasKey(x => x.Id);
-
-            userLog.Property(x => x.Changes)
-                .HasColumnType("jsonb");
-
-            userLog.Property(x => x.CreatedAt).HasColumnName("created_at");
-            userLog.Property(x => x.CreatedAtId).HasColumnName("created_at_id");
-            userLog.Property(x => x.CreatedBy).HasColumnName("created_by");
-
-            userLog.Property(x => x.ActionType).HasColumnName("action_type");
-            userLog.Property(x => x.ModelName).HasColumnName("model_name");
-            userLog.Property(x => x.ModelId).HasColumnName("model_id");
-            userLog.Property(x => x.Detail).HasColumnName("detail");
-
-            // ✅ New columns mapped correctly
-            userLog.Property(x => x.IpAddress).HasColumnName("ip_address");
-            userLog.Property(x => x.Browser).HasColumnName("browser");
-            userLog.Property(x => x.Device).HasColumnName("device");
-            userLog.Property(x => x.OperatingSystem).HasColumnName("os");
-            userLog.Property(x => x.UserAgent).HasColumnName("user_agent");
-
-            // RefreshToken -> User relation
-            modelBuilder.Entity<RefreshToken>()
-                .HasOne(r => r.User)
-                .WithMany(u => u.RefreshTokens)
-                .HasForeignKey(r => r.UserId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .IsRequired(false);
-
-            // Role unique constraint
-            modelBuilder.Entity<Role>()
-                .HasIndex(r => new { r.Name, r.GuardName })
-                .IsUnique();
-
-            // Permission unique constraint
-            modelBuilder.Entity<Permission>()
-                .HasIndex(p => new { p.Name, p.GuardName })
-                .IsUnique();
-
-            // RolePermission relationships
-            modelBuilder.Entity<RolePermission>()
-                .HasOne(rp => rp.Role)
-                .WithMany(r => r.RolePermissions)
-                .HasForeignKey(rp => rp.RoleId);
-
-            modelBuilder.Entity<RolePermission>()
-                .HasOne(rp => rp.Permission)
-                .WithMany(p => p.RolePermissions)
-                .HasForeignKey(rp => rp.PermissionId);
-
-            // ModelRole relationships
-            modelBuilder.Entity<ModelRole>()
-                .HasOne(mr => mr.Role)
-                .WithMany(r => r.ModelRoles)
-                .HasForeignKey(mr => mr.RoleId);
-
-            // ModelPermission relationships
-            modelBuilder.Entity<ModelPermission>()
-                .HasOne(mp => mp.Permission)
-                .WithMany(p => p.ModelPermissions)
-                .HasForeignKey(mp => mp.PermissionId);
-
-                
-
-            // TranslationKey unique index
-            modelBuilder.Entity<TranslationKey>()
-                .HasIndex(k => new { k.Module, k.Key })
-                .IsUnique();
-
-            // TranslationValue unique index
-            modelBuilder.Entity<TranslationValue>()
-                .HasIndex(v => new { v.KeyId, v.Lang })
-                .IsUnique();
-
-            // TranslationValue -> TranslationKey relationship
-            modelBuilder.Entity<TranslationValue>()
-                .HasOne(v => v.Key)
-                .WithMany(k => k.Values)
-                .HasForeignKey(v => v.KeyId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            // Otp -> User relationship
-            modelBuilder.Entity<Otp>()
-                .HasOne(o => o.User)
-                .WithMany()
-                .HasForeignKey(o => o.UserId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .IsRequired(false);
-
-            // PasswordReset -> User relationship
-            modelBuilder.Entity<PasswordReset>()
-                .HasOne(p => p.User)
-                .WithMany()
-                .HasForeignKey(p => p.UserId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .IsRequired(false);
-
-                 // Mail -> User relationship
-            modelBuilder.Entity<Mail>()
-                .HasOne(m => m.CreatedByUser)
-                .WithMany() // Optional: No collection in User
-                .HasForeignKey(m => m.CreatedBy)
-                .OnDelete(DeleteBehavior.SetNull); // Nullable FK
-
-             modelBuilder.Entity<UserTableCombination>()
-                .Property(e => e.ShowColumnCombinations)
-                .HasColumnType("text[]");
-
-                modelBuilder.Entity<Role>()
-                .Property(r => r.CreatedBy)
-                .HasColumnName("created_by");
-
-            modelBuilder.Entity<Role>()
-                .Property(r => r.UpdatedBy)
-                .HasColumnName("updated_by");
-
-            modelBuilder.Entity<Role>()
-                .Property(r => r.DeletedAt)
-                .HasColumnName("deleted_at");
-
-            // Configure audit fields for Permission
-            modelBuilder.Entity<Permission>()
-                .Property(p => p.CreatedBy)
-                .HasColumnName("created_by");
-
-            modelBuilder.Entity<Permission>()
-                .Property(p => p.UpdatedBy)
-                .HasColumnName("updated_by");
-
-            modelBuilder.Entity<Permission>()
-                .Property(p => p.DeletedAt)
-                .HasColumnName("deleted_at");
-
-            modelBuilder.Entity<Option>()
-                .HasQueryFilter(o => !o.IsDeleted);
-
-            modelBuilder.Entity<Option>()
-                .HasIndex(o => new { o.Name, o.ParentId })
-                .IsUnique();
-
-            modelBuilder.Entity<Option>()
-                .HasOne(o => o.Parent)
-                .WithMany(o => o.Children)
-                .HasForeignKey(o => o.ParentId)
-                .OnDelete(DeleteBehavior.Restrict);
-        }    
+        }
     }
 }

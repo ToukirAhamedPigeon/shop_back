@@ -7,6 +7,7 @@ using shop_back.src.Shared.Application.DTOs.Users;
 using shop_back.src.Shared.Application.DTOs.Common;
 using System.Reflection;
 using Newtonsoft.Json;
+using shop_back.src.Shared.Application.Exceptions;
 
 namespace shop_back.src.Shared.Infrastructure.Repositories
 {
@@ -48,9 +49,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
 
         public async Task<User?> GetByIdentifierAsync(string identifier)
         {
-            // ✅ Correction:
-            // Merged the `Where(u => !u.IsDeleted)` and `FirstOrDefaultAsync(...)`
-            // into a single predicate so EF Core can fully translate to SQL
             return await _context.Users
                 .FirstOrDefaultAsync(u =>
                     !u.IsDeleted && 
@@ -70,7 +68,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
         public async Task<User?> GetByIdAsync(Guid id)
         {
             return await _context.Users
-                .FirstOrDefaultAsync(u =>u.Id == id);
+                .FirstOrDefaultAsync(u => u.Id == id && !u.IsDeleted);
         }
 
         public async Task<User?> GetByMobileNoAsync(string mobileNo)
@@ -89,37 +87,25 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             int PageSize
         )> GetFilteredAsync(UserFilterRequest req)
         {
-            // Start with base query
             IQueryable<User> baseQuery;
             
             Console.WriteLine($"req: {JsonConvert.SerializeObject(req)}");
 
-            // ============================================
-            // 1️⃣ IsDeleted filter - Handle this FIRST
-            // ============================================
             if (req.IsDeleted.HasValue && req.IsDeleted.Value)
             {
-                // Show ONLY deleted users - ignore global filter
                 baseQuery = _context.Users
                     .IgnoreQueryFilters()
                     .Where(u => u.IsDeleted == true);
             }
             else
             {
-                // Show ONLY non-deleted users (default) - global filter applies
                 baseQuery = _context.Users
                     .Where(u => !u.IsDeleted);
             }
 
-            // ============================================
-            // 2️⃣ IsActive filter
-            // ============================================
             if (req.IsActive.HasValue)
                 baseQuery = baseQuery.Where(u => u.IsActive == req.IsActive.Value);
 
-            // ============================================
-            // 3️⃣ Search (Q) - User fields + Roles + Permissions
-            // ============================================
             if (!string.IsNullOrWhiteSpace(req.Q))
             {
                 var q = req.Q.Trim();
@@ -131,7 +117,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     (u.MobileNo != null && u.MobileNo.Contains(q)) ||
                     (u.Address != null && u.Address.Contains(q)) ||
 
-                    // Role search
                     _context.ModelRoles.Any(mr =>
                         mr.ModelId == u.Id &&
                         mr.ModelName == "User" &&
@@ -141,7 +126,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                         )
                     ) ||
 
-                    // Permission search
                     (
                         _context.ModelPermissions.Any(mp =>
                             mp.ModelId == u.Id &&
@@ -166,9 +150,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 );
             }
 
-            // ============================================
-            // 4️⃣ Gender filter
-            // ============================================
             if (req.Gender != null && req.Gender.Any())
             {
                 baseQuery = baseQuery.Where(u =>
@@ -176,9 +157,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 );
             }
 
-            // ============================================
-            // 5️⃣ Created By filter
-            // ============================================
             if (req.CreatedBy != null && req.CreatedBy.Any())
             {
                 baseQuery = baseQuery.Where(u =>
@@ -187,9 +165,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 );
             }
 
-            // ============================================
-            // 6️⃣ Updated By filter
-            // ============================================
             if (req.UpdatedBy != null && req.UpdatedBy.Any())
             {
                 baseQuery = baseQuery.Where(u =>
@@ -198,9 +173,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 );
             }
 
-            // ============================================
-            // 7️⃣ Roles filter
-            // ============================================
             if (req.Roles != null && req.Roles.Any())
             {
                 baseQuery = baseQuery.Where(u =>
@@ -215,13 +187,9 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 );
             }
 
-            // ============================================
-            // 8️⃣ Permissions filter
-            // ============================================
             if (req.Permissions != null && req.Permissions.Any())
             {
                 baseQuery = baseQuery.Where(u =>
-                    // Direct user permissions
                     _context.ModelPermissions.Any(mp =>
                         mp.ModelId == u.Id &&
                         mp.ModelName == "User" &&
@@ -230,7 +198,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                             req.Permissions.Contains(p.Name)
                         )
                     ) ||
-                    // Role based permissions
                     _context.RolePermissions.Any(rp =>
                         _context.ModelRoles.Any(mr =>
                             mr.ModelId == u.Id &&
@@ -245,15 +212,11 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 );
             }
 
-            // ============================================
-            // 9️⃣ Date range filters
-            // ============================================
             if (req.DateType != null && req.DateType.Any() && (req.From.HasValue || req.To.HasValue))
             {
                 var from = req.From?.Date ?? DateTime.MinValue;
                 var to = req.To?.Date.AddDays(1).AddTicks(-1) ?? DateTime.MaxValue;
 
-                // Build OR condition for multiple date types
                 var dateFilterPredicate = PredicateBuilder.False<User>();
                 
                 foreach (var col in req.DateType)
@@ -288,16 +251,12 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 baseQuery = baseQuery.Where(dateFilterPredicate);
             }
 
-            // 📊 Counts (before pagination)
             int totalCount = await baseQuery.CountAsync();
-            
-            // Grand total should count ALL users (including deleted)
             int grandTotalCount = await _context.Users.IgnoreQueryFilters().CountAsync();
 
             bool desc = req.SortOrder?.ToLower() == "desc";
             var sortBy = req.SortBy?.ToLower();
 
-            // 🔃 Sorting
             IOrderedQueryable<User> query;
             
             query = sortBy switch
@@ -319,13 +278,11 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 _ => desc ? baseQuery.OrderByDescending(x => x.CreatedAt) : baseQuery.OrderBy(x => x.CreatedAt)
             };
 
-            // 📄 Pagination
             var users = await query
                 .Skip((req.Page - 1) * req.Limit)
                 .Take(req.Limit)
                 .ToListAsync();
 
-            // 🔥 Attach roles & permissions
             var result = new List<UserDto>();
             foreach (var user in users)
             {
@@ -383,6 +340,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 req.Limit
             );
         }
+        
         public async Task AddAsync(User user)
         {
             await _context.Users.AddAsync(user);
@@ -401,10 +359,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
 
         public async Task<IEnumerable<SelectOptionDto>> GetDistinctCreatorsAsync(SelectRequestDto req)
         {
-            // Console.WriteLine($"========== UserRepository.GetDistinctCreatorsAsync ==========");
-            // Console.WriteLine($"req: {JsonConvert.SerializeObject(req)}");
-            
-            // Get distinct creator IDs from ALL users (including deleted)
             var creatorIds = await _context.Users
                 .IgnoreQueryFilters()  
                 .Where(u => u.CreatedBy != null)
@@ -412,33 +366,26 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 .Distinct()
                 .ToListAsync();
 
-            // Console.WriteLine($"Found {creatorIds.Count} distinct creator IDs (including deleted)");
-
             if (!creatorIds.Any())
             {
-                Console.WriteLine("No creators found");
                 return new List<SelectOptionDto>();
             }
 
-            // Now get the actual user details for those creator IDs
-            // Include deleted creators so we can show them
             var query = _context.Users
-                .IgnoreQueryFilters()  // 🔥 Include deleted creators
+                .IgnoreQueryFilters()
                 .Where(u => creatorIds.Contains(u.Id))
                 .Select(u => new SelectOptionDto 
                 { 
                     Value = u.Id.ToString(), 
-                    Label = u.Name + (u.IsDeleted ? " (Deleted)" : "")  // Mark deleted users
+                    Label = u.Name + (u.IsDeleted ? " (Deleted)" : "")
                 })
                 .AsQueryable();
 
-            // Apply search filter
             if (!string.IsNullOrWhiteSpace(req.Search))
             {
                 query = query.Where(x => x.Label.Contains(req.Search));
             }
 
-            // Apply sorting
             if (req.SortOrder?.ToLower() == "desc")
             {
                 query = query.OrderByDescending(x => x.Label);
@@ -448,13 +395,11 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 query = query.OrderBy(x => x.Label);
             }
 
-            // Apply pagination
             var result = await query
                 .Skip(req.Skip)
                 .Take(req.Limit)
                 .ToListAsync();
 
-            Console.WriteLine($"Returning {result.Count} items");
             return result;
         }
 
@@ -479,7 +424,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
 
             var result = await query
                 .Select(x => new SelectOptionDto { Value = x.user.Id.ToString(), Label = x.user.Name })
-                .IgnoreQueryFilters()  // 🔥 Include deleted updaters
+                .IgnoreQueryFilters()
                 .Distinct()
                 .OrderBy(x => x.Label)
                 .Skip(req.Skip)
@@ -488,26 +433,26 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
 
             return result;
         }
+        
         public async Task<IEnumerable<SelectOptionDto>> GetDistinctDateTypesAsync(SelectRequestDto req)
         {
-            // Get all properties of User that are DateTime or DateTime?
             var dateProperties = typeof(User)
                 .GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => p.PropertyType == typeof(DateTime) || p.PropertyType == typeof(DateTime?))
                 .Select(p => new SelectOptionDto
                 {
-                    Value = p.Name, // send property name as value
-                    Label = p.Name  // optionally you can prettify it for frontend
+                    Value = p.Name,
+                    Label = p.Name
                 })
                 .ToList();
 
-            // Pagination
             var paged = dateProperties
                 .Skip(req.Skip)
                 .Take(req.Limit);
 
             return await Task.FromResult(paged);
         }
+        
         public async Task<bool> ExistsByUsernameAsync(string username, Guid ignoreId)
         {
             return await _context.Users
@@ -534,20 +479,40 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
 
         public async Task<bool> HasRelatedRecordsAsync(Guid userId)
         {
-            // Check all tables except mail_verifications, model_roles, model_permissions
-            var hasUserLogs = await _context.UserLogs.AnyAsync(ul => ul.CreatedBy == userId);
+            // Only check critical tables that should block permanent delete
+            // User Logs, Mails, Model Roles, Mail Verifications are SKIPPED - they will be deleted
             var hasRefreshTokens = await _context.RefreshTokens.AnyAsync(rt => rt.UserId == userId);
             var hasPasswordResets = await _context.PasswordResets.AnyAsync(pr => pr.UserId == userId);
             var hasUserTableCombination = await _context.UserTableCombinations.AnyAsync(utc => utc.UserId == userId || utc.UpdatedBy == userId);
-            Console.WriteLine($"hasUserLogs: {hasUserLogs}");
-            Console.WriteLine($"hasRefreshTokens: {hasRefreshTokens}");
-            Console.WriteLine($"hasPasswordResets: {hasPasswordResets}");
-            Console.WriteLine($"hasUserTableCombination: {hasUserTableCombination}");
             
-            // Add any other tables that should prevent permanent deletion
-            // For example: orders, invoices, etc.
+            return hasRefreshTokens || hasPasswordResets || hasUserTableCombination;
+        }
+
+        public async Task<(bool HasRecords, RelatedRecordsDetails Details)> HasRelatedRecordsWithDetailsAsync(Guid userId)
+        {
+            var details = new RelatedRecordsDetails();
             
-            return hasUserLogs || hasRefreshTokens || hasPasswordResets || hasUserTableCombination;
+            // Skip UserLogs - will be deleted
+            // Skip Mails - will be deleted
+            // Skip ModelRoles - will be deleted
+            // Skip MailVerifications - will be deleted
+            
+            // Check RefreshTokens
+            details.RefreshTokensCount = await _context.RefreshTokens.CountAsync(rt => rt.UserId == userId);
+            details.HasRefreshTokens = details.RefreshTokensCount > 0;
+            
+            // Check PasswordResets
+            details.PasswordResetsCount = await _context.PasswordResets.CountAsync(pr => pr.UserId == userId);
+            details.HasPasswordResets = details.PasswordResetsCount > 0;
+            
+            // Check UserTableCombinations
+            details.UserTableCombinationsCount = await _context.UserTableCombinations
+                .CountAsync(utc => utc.UserId == userId || utc.UpdatedBy == userId);
+            details.HasUserTableCombinations = details.UserTableCombinationsCount > 0;
+            
+            var hasRecords = details.HasRefreshTokens || details.HasPasswordResets || details.HasUserTableCombinations;
+            
+            return (hasRecords, details);
         }
 
         public async Task<bool> HasVerifiedEmailAsync(Guid userId)
@@ -560,77 +525,112 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             return user;
         }
 
-        private void DeleteUserProfileImage(User user)
+        public async Task DeleteUserProfileImageAsync(User user)
         {
             if (string.IsNullOrEmpty(user?.ProfileImage))
                 return;
 
             try
             {
-                // Get the filename from the path (handles both /uploads/users/file.jpg and uploads/users/file.jpg)
-                var relativePath = user.ProfileImage.TrimStart('/');
-                
-                // Try different possible paths
-                var possiblePaths = new[]
+                // Check if it's a remote URL
+                if (user.ProfileImage.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                    user.ProfileImage.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
                 {
-                    Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath),
-                    Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "users", Path.GetFileName(user.ProfileImage)),
-                    Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath.Replace('/', Path.DirectorySeparatorChar))
-                };
-
-                foreach (var path in possiblePaths)
+                    Console.WriteLine($"Deleting remote profile image: {user.ProfileImage}");
+                    await FileHelper.DeleteFileAsync(user.ProfileImage);
+                }
+                else
                 {
-                    var fullPath = Path.GetFullPath(path);
+                    // Local file path
+                    Console.WriteLine($"Deleting local profile image: {user.ProfileImage}");
+                    
+                    var relativePath = user.ProfileImage.TrimStart('/');
+                    var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath);
+                    
                     if (File.Exists(fullPath))
                     {
                         File.Delete(fullPath);
-                        Console.WriteLine($"Deleted profile image: {fullPath}");
-                        return; // Exit after successful deletion
+                        Console.WriteLine($"Deleted local profile image: {fullPath}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Local profile image not found: {fullPath}");
                     }
                 }
-
-                Console.WriteLine($"Profile image not found for deletion: {user.ProfileImage}");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error deleting profile image for user {user.Id}: {ex.Message}");
-                // Don't throw - we still want to delete the user
             }
         }
 
         public async Task HardDeleteAsync(Guid userId)
         {
-            // First, get the user to access their profile image path
             var user = await _context.Users
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(u => u.Id == userId);
             
             if (user == null) return;
 
-            // Delete profile image from wwwroot if it exists
-            DeleteUserProfileImage(user);
-
-            // Delete related records in other tables
-            // Delete model_roles entries
+            // Delete profile image as part of hard delete (after confirmation)
+            await DeleteUserProfileImageAsync(user);
+            
+            // DO NOT create a new transaction here - the calling method already has one
+            // Just perform the operations directly
+            
+            // Delete all related records
+            var mails = await _context.Mails.Where(m => m.CreatedBy == userId).ToListAsync();
+            _context.Mails.RemoveRange(mails);
+            
+            var userLogs = await _context.UserLogs
+                .Where(ul => ul.CreatedBy == userId || (ul.ModelName == "User" && ul.ModelId == userId.ToString()))
+                .ToListAsync();
+            _context.UserLogs.RemoveRange(userLogs);
+            
+            var refreshTokens = await _context.RefreshTokens.Where(rt => rt.UserId == userId).ToListAsync();
+            _context.RefreshTokens.RemoveRange(refreshTokens);
+            
+            var passwordResets = await _context.PasswordResets.Where(pr => pr.UserId == userId).ToListAsync();
+            _context.PasswordResets.RemoveRange(passwordResets);
+            
+            var userTableCombinations = await _context.UserTableCombinations
+                .Where(utc => utc.UserId == userId || utc.UpdatedBy == userId)
+                .ToListAsync();
+            _context.UserTableCombinations.RemoveRange(userTableCombinations);
+            
             var modelRoles = await _context.ModelRoles
                 .Where(mr => mr.ModelId == userId && mr.ModelName == "User")
                 .ToListAsync();
             _context.ModelRoles.RemoveRange(modelRoles);
             
-            // Delete model_permissions entries
             var modelPermissions = await _context.ModelPermissions
                 .Where(mp => mp.ModelId == userId && mp.ModelName == "User")
                 .ToListAsync();
             _context.ModelPermissions.RemoveRange(modelPermissions);
             
-            // Delete mail_verifications entries
             var mailVerifications = await _context.MailVerifications
                 .Where(mv => mv.UserId == userId)
                 .ToListAsync();
             _context.MailVerifications.RemoveRange(mailVerifications);
             
+            // Update foreign key references
+            var usersCreatedByThis = await _context.Users.Where(u => u.CreatedBy == userId).ToListAsync();
+            foreach (var u in usersCreatedByThis)
+            {
+                u.CreatedBy = null;
+            }
+            
+            var usersUpdatedByThis = await _context.Users.Where(u => u.UpdatedBy == userId).ToListAsync();
+            foreach (var u in usersUpdatedByThis)
+            {
+                u.UpdatedBy = null;
+            }
+            
             // Finally delete the user
             _context.Users.Remove(user);
+            
+            // NO SaveChangesAsync here - let the calling method handle it
+            Console.WriteLine($"✅ User {userId} marked for permanent deletion");
         }
 
         public async Task SoftDeleteAsync(Guid userId, Guid? deletedBy)
@@ -657,5 +657,11 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             }
         }
 
+        public async Task<User?> GetByIdIncludingDeletedAsync(Guid id)
+        {
+            return await _context.Users
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Id == id);
+        }
     }
 }

@@ -4,6 +4,7 @@ using shop_back.src.Shared.Application.DTOs.Users;
 using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Infrastructure.Services.Authorization;
 using Microsoft.AspNetCore.Authorization;
+using shop_back.src.Shared.Application.Exceptions;
 
 namespace shop_back.src.Shared.API.Controllers
 {
@@ -58,6 +59,7 @@ namespace shop_back.src.Shared.API.Controllers
 
             return Ok(result.Message);
         }
+
         [Authorize]
         [HasPermissionAny("create-admin-users")]
         [HttpPost("{id}/resend-verification")]
@@ -73,7 +75,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HasPermissionAny("update-admin-users")]
-        [HttpPost("{id}/regenerate-qr")]
+        [HttpPost("{id}/regenerate-qr")]  // Make sure this matches
         public async Task<IActionResult> RegenerateQr(Guid id)
         {
             var currentUserId = User?.FindFirst("UserId")?.Value 
@@ -81,9 +83,9 @@ namespace shop_back.src.Shared.API.Controllers
 
             var user = await _service.RegenerateQrAsync(id, currentUserId);
 
-            if (user == null) return NotFound();
+            if (user == null) return NotFound(new { message = "User not found" });
 
-            return Ok(user);
+            return Ok(new { qrCode = user.QRCode, message = "QR Code regenerated successfully" });
         }
 
         [Authorize]
@@ -91,7 +93,7 @@ namespace shop_back.src.Shared.API.Controllers
         [HasPermissionAny("update-admin-users")]
         public async Task<IActionResult> GetUserForEdit(Guid id)
         {
-            var user = await _service.GetUserForEditAsync(id); // Only direct permissions
+            var user = await _service.GetUserForEditAsync(id);
             if (user == null) return NotFound();
 
             return Ok(user);
@@ -99,7 +101,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpPut("{id}")]
-        [HasPermissionAny("update-admin-users")] // Admin only
+        [HasPermissionAny("update-admin-users")]
         public async Task<IActionResult> Update(Guid id, [FromForm] UpdateUserRequest request)
         {
             var currentUserId = User?.FindFirst("UserId")?.Value 
@@ -107,7 +109,13 @@ namespace shop_back.src.Shared.API.Controllers
 
             var result = await _service.UpdateUserAsync(id, request, currentUserId);
 
-            return result.Success ? Ok(result) : BadRequest(result.Message);
+            // Return proper JSON response
+            if (result.Success)
+            {
+                return Ok(new { success = true, message = result.Message });
+            }
+            
+            return BadRequest(new { success = false, message = result.Message });
         }
 
         [Authorize]
@@ -142,6 +150,7 @@ namespace shop_back.src.Shared.API.Controllers
 
             return result.Success ? Ok(result) : BadRequest(result.Message);
         }
+
         [Authorize]
         [HttpDelete("{id}")]
         [HasPermissionAny("delete-admin-users")]
@@ -150,15 +159,29 @@ namespace shop_back.src.Shared.API.Controllers
             var currentUserId = User?.FindFirst("UserId")?.Value 
                                 ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
             
-            var result = await _service.DeleteUserAsync(id, permanent, currentUserId);
-            
-            if (!result.Success)
-                return BadRequest(new { message = result.Message });
-            
-            return Ok(new { 
-                message = result.Message, 
-                deleteType = result.DeleteType 
-            });
+            try
+            {
+                var result = await _service.DeleteUserAsync(id, permanent, currentUserId);
+                
+                if (!result.Success)
+                    return BadRequest(new { message = result.Message });
+                
+                return Ok(new { 
+                    message = result.Message, 
+                    deleteType = result.DeleteType 
+                });
+            }
+            catch (ForeignKeyConstraintException ex)
+            {
+                return BadRequest(new { 
+                    message = ex.Message,
+                    blockingTables = ex.BlockingTables
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [Authorize]
@@ -176,7 +199,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpGet("{id}/delete-info")]
-        [HasPermissionAny("restore-admin-users")]
+        [HasPermissionAny("delete-admin-users")]
         public async Task<IActionResult> GetDeleteInfo(Guid id)
         {
             var result = await _service.CheckDeleteEligibilityAsync(id);
@@ -186,7 +209,10 @@ namespace shop_back.src.Shared.API.Controllers
             
             return Ok(new { 
                 canBePermanent = result.CanBePermanent,
-                message = result.Message
+                message = result.Message,
+                hasRelatedRecords = result.HasRelatedRecords,
+                hasVerifiedEmail = result.HasVerifiedEmail,
+                relatedRecordsDetails = result.RelatedRecordsDetails
             });
         }
     }
