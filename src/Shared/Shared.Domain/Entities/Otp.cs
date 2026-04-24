@@ -37,7 +37,7 @@ namespace shop_back.src.Shared.Domain.Entities
         [Required]
         [ForeignKey(nameof(User))]
         [Column("user_id")]
-        public Guid UserId { get; set; }
+        public Guid? UserId { get; set; }
 
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

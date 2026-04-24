@@ -13,10 +13,10 @@ namespace shop_back.src.Shared.Domain.Entities
 
         [Required]
         [Column("user_id")]
-        public Guid UserId { get; set; }
+        public Guid? UserId { get; set; }
 
         [ForeignKey("UserId")]
-        public User User { get; set; } = null!;
+        public User? User { get; set; }
 
         [Required]
         [Column("token")]

@@ -26,9 +26,9 @@ namespace shop_back.src.Shared.Domain.Entities
         // Relation to User
         [Required]
         [Column("user_id")]
-        public Guid UserId { get; set; }
+        public Guid? UserId { get; set; }
 
-        public User User { get; set; } = null!;
+        public User? User { get; set; }
 
         // Track who updated/revoked this token
         [Column("updated_by")]

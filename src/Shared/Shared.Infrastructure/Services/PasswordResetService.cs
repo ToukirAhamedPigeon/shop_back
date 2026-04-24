@@ -99,7 +99,7 @@ public class PasswordResetService : IPasswordResetService
             throw new Exception("Invalid or expired token.");
 
         Console.WriteLine($"[USER ID CHECK] => {reset.UserId}");
-        var user = await _userRepo.GetByIdAsync(reset.UserId);
+        var user = await _userRepo.GetByIdAsync(reset.UserId??Guid.Empty);
         Console.WriteLine($"[USER CHECK] => {user?.Email} | Exists = {user != null}");
         if (user == null) throw new Exception("User not found.");
 

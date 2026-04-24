@@ -111,7 +111,8 @@ public class ChangePasswordService : IChangePasswordService
             throw new Exception("Token data is corrupted");
 
         // 2️⃣ Get user
-        var user = await _userRepo.GetByIdAsync(reset.UserId);
+        if (reset.UserId == null) throw new ArgumentNullException(nameof(reset.UserId));
+        var user = await _userRepo.GetByIdAsync(reset.UserId.Value);
         if (user == null)
             throw new Exception("User not found");
 

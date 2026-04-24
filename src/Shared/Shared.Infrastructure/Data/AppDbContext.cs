@@ -61,31 +61,44 @@ namespace shop_back.src.Shared.Infrastructure.Data
                 .OnDelete(DeleteBehavior.Cascade);
 
             // ============================================
-            // RefreshToken configuration
+            // RefreshToken configuration - Make optional to avoid filter conflicts
             // ============================================
             modelBuilder.Entity<RefreshToken>()
                 .HasOne(r => r.User)
                 .WithMany(u => u.RefreshTokens)
                 .HasForeignKey(r => r.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Cascade)
+                .IsRequired(false); // Make optional to avoid filter issues
 
             // ============================================
-            // PasswordReset configuration
+            // PasswordReset configuration - Make optional to avoid filter conflicts
             // ============================================
             modelBuilder.Entity<PasswordReset>()
                 .HasOne(p => p.User)
                 .WithMany()
                 .HasForeignKey(p => p.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Cascade)
+                .IsRequired(false); // Make optional to avoid filter issues
 
             // ============================================
-            // MailVerification configuration
+            // MailVerification configuration - Make optional to avoid filter conflicts
             // ============================================
             modelBuilder.Entity<MailVerification>()
                 .HasOne(m => m.User)
                 .WithMany()
                 .HasForeignKey(m => m.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Cascade)
+                .IsRequired(false);
+
+            // ============================================
+            // Otp configuration - Make optional to avoid filter conflicts
+            // ============================================
+            modelBuilder.Entity<Otp>()
+                .HasOne(o => o.User)
+                .WithMany()
+                .HasForeignKey(o => o.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .IsRequired(false);
 
             // ============================================
             // Mail configuration
@@ -94,7 +107,7 @@ namespace shop_back.src.Shared.Infrastructure.Data
                 .HasOne(m => m.CreatedByUser)
                 .WithMany()
                 .HasForeignKey(m => m.CreatedBy)
-                .OnDelete(DeleteBehavior.SetNull); 
+                .OnDelete(DeleteBehavior.SetNull);
 
             // ============================================
             // ModelRole configuration
@@ -158,15 +171,6 @@ namespace shop_back.src.Shared.Infrastructure.Data
                 .HasOne(v => v.Key)
                 .WithMany(k => k.Values)
                 .HasForeignKey(v => v.KeyId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            // ============================================
-            // Otp configuration
-            // ============================================
-            modelBuilder.Entity<Otp>()
-                .HasOne(o => o.User)
-                .WithMany()
-                .HasForeignKey(o => o.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             // ============================================

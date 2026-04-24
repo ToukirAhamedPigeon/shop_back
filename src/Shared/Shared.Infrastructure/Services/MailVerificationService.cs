@@ -77,7 +77,9 @@ namespace shop_back.src.Shared.Application.Services
             verification.UsedAt = DateTime.UtcNow;
 
             // Update user's EmailVerifiedAt
-            verification.User.EmailVerifiedAt = DateTime.UtcNow;
+            if (verification.User != null){
+                verification.User.EmailVerifiedAt = DateTime.UtcNow;
+            }
 
             await _repo.SaveChangesAsync();
 

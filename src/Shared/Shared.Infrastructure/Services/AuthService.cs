@@ -101,6 +101,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
             await _refreshTokenRepo.RemoveExpiredAsync();
 
+            if (existing.User == null) throw new ArgumentNullException(nameof(existing.User));
             var newAccessToken = GenerateJwtToken(existing.User);
 
             return new AuthResponseDto
@@ -122,11 +123,11 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
                     // ✅ User log for logout
                     await _userLogHelper.LogAsync(
-                        userId: refreshToken.UserId,
+                        userId: (refreshToken.UserId!=null)?refreshToken.UserId.Value:Guid.Empty,
                         actionType: "Logout",
-                        detail: $"User logged out successfully.",
+                        detail: $"User '{((refreshToken.UserId!=null)?refreshToken.UserId.Value:Guid.Empty.ToString())}' has logged out successfully.",
                         modelName: "User",
-                        modelId: refreshToken.UserId.ToString()
+                        modelId: refreshToken.UserId?.ToString()
                     );
                 }
             }
