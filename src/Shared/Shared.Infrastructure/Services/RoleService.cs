@@ -68,21 +68,17 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         public async Task<(bool Success, string Message)> CreateRoleAsync(CreateRoleRequest request, string? createdBy)
         {
-            // Validate
             if (string.IsNullOrWhiteSpace(request.Names))
                 return (false, "Role names are required");
             
-            // Parse multiple role names separated by "=" AND expand any shorthand patterns
             var roleNames = NameExpander.ExpandNames(request.Names);
             
             if (!roleNames.Any())
                 return (false, "At least one valid role name is required");
             
-            // Check for duplicates in request (after expansion)
             if (roleNames.Count != roleNames.Distinct().Count())
                 return (false, "Duplicate role names found in request");
             
-            // Check for existing roles
             var existingRoles = new List<string>();
             var validRoles = new List<string>();
             
@@ -98,19 +94,13 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 }
             }
             
-            if (existingRoles.Any())
+            if (existingRoles.Any() && !validRoles.Any())
             {
-                if (!validRoles.Any())
-                {
-                    return (false, $"Role(s) already exist: {string.Join(", ", existingRoles)}");
-                }
-                // If some roles exist and some don't, continue with valid ones
+                return (false, $"Role(s) already exist: {string.Join(", ", existingRoles)}");
             }
             
-            // Parse IsActive
             bool isActive = string.Equals(request.IsActive, "true", StringComparison.OrdinalIgnoreCase);
             
-            // Parse created by
             Guid? createdByGuid = null;
             if (!string.IsNullOrEmpty(createdBy) && Guid.TryParse(createdBy, out var parsed))
                 createdByGuid = parsed;
@@ -139,7 +129,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     await _repo.CreateRoleAsync(role);
                     createdRoles.Add(role);
                     
-                    // Assign permissions if provided (also expand permission names)
                     if (request.Permissions.Any())
                     {
                         var expandedPermissions = NameExpander.ExpandPermissionNames(request.Permissions);
@@ -149,7 +138,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 
                 await _repo.SaveChangesAsync();
                 
-                // Log the action
                 var afterSnapshot = new
                 {
                     Roles = createdRoles.Select(r => new { r.Id, r.Name, r.GuardName, r.IsActive }),
@@ -189,11 +177,9 @@ namespace shop_back.src.Shared.Infrastructure.Services
             if (role == null)
                 return (false, "Role not found");
             
-            // Check uniqueness (excluding current role)
             if (role.Name != request.Name && await _repo.RoleExistsAsync(request.Name, id))
                 return (false, "Role name already exists");
             
-            // Get current state for logging
             var beforeSnapshot = new
             {
                 role.Id,
@@ -203,19 +189,16 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 Permissions = await _repo.GetPermissionsByRoleIdAsync(role.Id)
             };
             
-            // Parse updated by
             Guid? updatedByGuid = null;
             if (!string.IsNullOrEmpty(updatedBy) && Guid.TryParse(updatedBy, out var parsed))
                 updatedByGuid = parsed;
             
-            // Parse IsActive
             bool isActive = string.Equals(request.IsActive, "true", StringComparison.OrdinalIgnoreCase);
             
             using var transaction = await _context.Database.BeginTransactionAsync();
             
             try
             {
-                // Update role
                 role.Name = request.Name;
                 role.GuardName = request.GuardName;
                 role.IsActive = isActive;
@@ -223,13 +206,9 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 role.UpdatedBy = updatedByGuid;
                 
                 _repo.UpdateRole(role);
-                
-                // Update permissions
                 await _repo.AssignPermissionsToRoleAsync(role.Id, request.Permissions);
-                
                 await _repo.SaveChangesAsync();
                 
-                // Log the action
                 var afterSnapshot = new
                 {
                     role.Id,
@@ -263,30 +242,21 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         public async Task<(bool Success, string Message, string DeleteType)> DeleteRoleAsync(Guid id, bool permanent, string? currentUserId)
         {
-            var role = await _repo.GetRoleByIdAsync(id);
+            var role = await _repo.GetRoleByIdIncludingDeletedAsync(id);
             if (role == null)
                 return (false, "Role not found", "none");
-            
-            if (role.IsDeleted)
-                return (false, "Role is already deleted", "none");
-            
-            // Check if role can be permanently deleted (only Developer role type can be hard deleted)
-            string deleteType = "soft";
-            if (permanent)
-            {
-                // Check if role has related records
-                var hasRelatedRecords = await _repo.RoleHasRelatedRecordsAsync(id);
-                
-                // Allow permanent delete only for roles without related records
-                if (!hasRelatedRecords)
-                {
-                    deleteType = "permanent";
-                }
-            }
             
             Guid? deletedBy = null;
             if (!string.IsNullOrEmpty(currentUserId) && Guid.TryParse(currentUserId, out var parsed))
                 deletedBy = parsed;
+            
+            string deleteType = "soft";
+            
+            if (permanent)
+            {
+                // No check for related records - always allow permanent delete
+                deleteType = "permanent";
+            }
             
             using var transaction = await _context.Database.BeginTransactionAsync();
             
@@ -295,7 +265,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 await _repo.DeleteRoleAsync(id, deleteType == "permanent", deletedBy);
                 await _repo.SaveChangesAsync();
                 
-                // Log the action
                 await _userLogHelper.LogAsync(
                     userId: deletedBy ?? Guid.Empty,
                     actionType: "Delete",
@@ -356,22 +325,35 @@ namespace shop_back.src.Shared.Infrastructure.Services
             return (true, "Role restored successfully");
         }
 
-        public async Task<(bool Success, string Message, bool CanBePermanent)> CheckDeleteEligibilityAsync(Guid id)
+        public async Task<DeleteEligibilityResponse> CheckDeleteEligibilityAsync(Guid id)
         {
-            var role = await _repo.GetRoleByIdAsync(id);
+            var role = await _repo.GetRoleByIdIncludingDeletedAsync(id);
             if (role == null)
-                return (false, "Role not found", false);
+                return new DeleteEligibilityResponse 
+                { 
+                    Success = false, 
+                    Message = "Role not found", 
+                    CanBePermanent = false,
+                    HasRelatedRecords = false
+                };
             
             if (role.IsDeleted)
-                return (false, "Role is already deleted", false);
+                return new DeleteEligibilityResponse 
+                { 
+                    Success = true, 
+                    Message = "Role is in trash and can be permanently deleted. All related permissions and user assignments will be removed automatically.", 
+                    CanBePermanent = true,
+                    HasRelatedRecords = false
+                };
             
-            var hasRelatedRecords = await _repo.RoleHasRelatedRecordsAsync(id);
-            bool canBePermanent = !hasRelatedRecords;
-            string message = canBePermanent
-                ? "Role can be permanently deleted"
-                : "Role must be soft deleted due to existing related records";
-            
-            return (true, message, canBePermanent);
+            // Always allow permanent delete with auto-cleanup of relations
+            return new DeleteEligibilityResponse
+            {
+                Success = true,
+                Message = "Role can be permanently deleted. Any assigned permissions and user assignments will be automatically removed.",
+                CanBePermanent = true,
+                HasRelatedRecords = false
+            };
         }
     }
 }

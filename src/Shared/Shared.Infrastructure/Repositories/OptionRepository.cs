@@ -24,7 +24,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
         {
             IQueryable<Option> baseQuery;
             
-            // Handle deleted filter
             if (req.IsDeleted.HasValue && req.IsDeleted.Value)
             {
                 baseQuery = _context.Options
@@ -39,14 +38,11 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     .Where(o => !o.IsDeleted);
             }
             
-            // Handle active filter
             if (req.IsActive.HasValue)
                 baseQuery = baseQuery.Where(o => o.IsActive == req.IsActive.Value);
             
-            // Handle parent filter - FIXED with proper null checking
             if (req.FilterByNullParent)
             {
-                // Show only options with NO parent (parent_id IS NULL)
                 baseQuery = baseQuery.Where(o => o.ParentId == null);
             }
             else 
@@ -54,19 +50,15 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 var parentIdFilter = req.GetParentIdFilter();
                 if (parentIdFilter.HasValue && parentIdFilter.Value != Guid.Empty)
                 {
-                    // Show only options with specific parent
                     baseQuery = baseQuery.Where(o => o.ParentId == parentIdFilter.Value);
                 }
             }
-            // If ParentId is "all" or null/empty, don't filter by parent at all
             
-            // Handle date range filter
             if (req.CreatedFrom.HasValue)
                 baseQuery = baseQuery.Where(o => o.CreatedAt >= req.CreatedFrom.Value);
             if (req.CreatedTo.HasValue)
                 baseQuery = baseQuery.Where(o => o.CreatedAt <= req.CreatedTo.Value);
             
-            // Handle search
             if (!string.IsNullOrWhiteSpace(req.Q))
             {
                 var q = req.Q.Trim();
@@ -76,7 +68,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             int totalCount = await baseQuery.CountAsync();
             int grandTotalCount = await _context.Options.IgnoreQueryFilters().CountAsync();
             
-            // Handle sorting
             bool desc = req.SortOrder?.ToLower() == "desc";
             var sortBy = req.SortBy?.ToLower();
             
@@ -95,7 +86,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 .Take(req.Limit)
                 .ToListAsync();
             
-            // Get user names for audit fields - Fixed null handling
             var userIds = options
                 .SelectMany(o => new[] { o.CreatedBy, o.UpdatedBy, o.DeletedBy })
                 .Where(id => id.HasValue)
@@ -133,6 +123,14 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
         public async Task<Option?> GetOptionByIdAsync(Guid id)
         {
             return await _context.Options
+                .Include(o => o.Parent)
+                .FirstOrDefaultAsync(o => o.Id == id && !o.IsDeleted);
+        }
+
+        public async Task<Option?> GetOptionByIdIncludingDeletedAsync(Guid id)
+        {
+            return await _context.Options
+                .IgnoreQueryFilters()
                 .Include(o => o.Parent)
                 .FirstOrDefaultAsync(o => o.Id == id);
         }

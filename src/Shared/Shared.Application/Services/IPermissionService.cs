@@ -14,6 +14,6 @@ namespace shop_back.src.Shared.Application.Services
         Task<(bool Success, string Message)> UpdatePermissionAsync(Guid id, UpdatePermissionRequest request, string? updatedBy);
         Task<(bool Success, string Message, string DeleteType)> DeletePermissionAsync(Guid id, bool permanent, string? currentUserId);
         Task<(bool Success, string Message)> RestorePermissionAsync(Guid id, string? currentUserId);
-        Task<(bool Success, string Message, bool CanBePermanent)> CheckDeleteEligibilityAsync(Guid id);
+        Task<DeleteEligibilityResponse> CheckDeleteEligibilityAsync(Guid id);
     }
 }

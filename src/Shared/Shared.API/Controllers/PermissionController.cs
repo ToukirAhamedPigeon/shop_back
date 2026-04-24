@@ -5,6 +5,7 @@ using shop_back.src.Shared.Application.DTOs.Permissions;
 using shop_back.src.Shared.Application.DTOs.Common;
 using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Infrastructure.Services.Authorization;
+using shop_back.src.Shared.Application.Exceptions;
 
 namespace shop_back.src.Shared.API.Controllers
 {
@@ -78,16 +79,31 @@ namespace shop_back.src.Shared.API.Controllers
             var currentUserId = User?.FindFirst("UserId")?.Value 
                                 ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
             
-            var result = await _service.DeletePermissionAsync(id, permanent, currentUserId);
-            
-            if (!result.Success)
-                return BadRequest(new { message = result.Message });
-            
-            return Ok(new
+            try
             {
-                message = result.Message,
-                deleteType = result.DeleteType
-            });
+                var result = await _service.DeletePermissionAsync(id, permanent, currentUserId);
+                
+                if (!result.Success)
+                    return BadRequest(new { message = result.Message });
+                
+                return Ok(new
+                {
+                    message = result.Message,
+                    deleteType = result.DeleteType
+                });
+            }
+            catch (ForeignKeyConstraintException ex)
+            {
+                return BadRequest(new
+                {
+                    message = ex.Message,
+                    blockingTables = ex.BlockingTables
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [Authorize]
@@ -107,7 +123,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HttpGet("{id}/delete-info")]
-        [HasPermissionAny("restore-admin-permissions")]
+        [HasPermissionAny("delete-admin-permissions")]
         public async Task<IActionResult> GetDeleteInfo(Guid id)
         {
             var result = await _service.CheckDeleteEligibilityAsync(id);
@@ -118,7 +134,8 @@ namespace shop_back.src.Shared.API.Controllers
             return Ok(new
             {
                 canBePermanent = result.CanBePermanent,
-                message = result.Message
+                message = result.Message,
+                hasRelatedRecords = result.HasRelatedRecords
             });
         }
     }

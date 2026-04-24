@@ -12,6 +12,7 @@ namespace shop_back.src.Shared.Application.Repositories
             GetFilteredOptionsAsync(OptionFilterRequest req);
         
         Task<Option?> GetOptionByIdAsync(Guid id);
+        Task<Option?> GetOptionByIdIncludingDeletedAsync(Guid id);
         Task<bool> OptionExistsAsync(string name, Guid? parentId, Guid? ignoreId = null);
         Task<Option> CreateOptionAsync(Option option);
         void UpdateOption(Option option);

@@ -68,21 +68,17 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         public async Task<(bool Success, string Message)> CreatePermissionAsync(CreatePermissionRequest request, string? createdBy)
         {
-            // Validate
             if (string.IsNullOrWhiteSpace(request.Names))
                 return (false, "Permission names are required");
             
-            // Parse multiple permission names separated by "=" AND expand any shorthand patterns
             var permissionNames = NameExpander.ExpandNames(request.Names);
             
             if (!permissionNames.Any())
                 return (false, "At least one valid permission name is required");
             
-            // Check for duplicates in request (after expansion)
             if (permissionNames.Count != permissionNames.Distinct().Count())
                 return (false, "Duplicate permission names found in request");
             
-            // Check for existing permissions
             var existingPermissions = new List<string>();
             var validPermissions = new List<string>();
             
@@ -98,19 +94,13 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 }
             }
             
-            if (existingPermissions.Any())
+            if (existingPermissions.Any() && !validPermissions.Any())
             {
-                if (!validPermissions.Any())
-                {
-                    return (false, $"Permission(s) already exist: {string.Join(", ", existingPermissions)}");
-                }
-                // If some permissions exist and some don't, continue with valid ones
+                return (false, $"Permission(s) already exist: {string.Join(", ", existingPermissions)}");
             }
             
-            // Parse IsActive
             bool isActive = string.Equals(request.IsActive, "true", StringComparison.OrdinalIgnoreCase);
             
-            // Parse created by
             Guid? createdByGuid = null;
             if (!string.IsNullOrEmpty(createdBy) && Guid.TryParse(createdBy, out var parsed))
                 createdByGuid = parsed;
@@ -139,7 +129,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     await _repo.CreatePermissionAsync(permission);
                     createdPermissions.Add(permission);
                     
-                    // Assign roles if provided (also expand role names if needed)
                     if (request.Roles.Any())
                     {
                         var expandedRoles = NameExpander.ExpandNames(string.Join("=", request.Roles));
@@ -149,7 +138,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 
                 await _repo.SaveChangesAsync();
                 
-                // Log the action
                 var afterSnapshot = new
                 {
                     Permissions = createdPermissions.Select(p => new { p.Id, p.Name, p.GuardName, p.IsActive }),
@@ -189,11 +177,9 @@ namespace shop_back.src.Shared.Infrastructure.Services
             if (permission == null)
                 return (false, "Permission not found");
             
-            // Check uniqueness (excluding current permission)
             if (permission.Name != request.Name && await _repo.PermissionExistsAsync(request.Name, id))
                 return (false, "Permission name already exists");
             
-            // Get current state for logging
             var beforeSnapshot = new
             {
                 permission.Id,
@@ -203,19 +189,16 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 Roles = await _repo.GetRolesByPermissionIdAsync(permission.Id)
             };
             
-            // Parse updated by
             Guid? updatedByGuid = null;
             if (!string.IsNullOrEmpty(updatedBy) && Guid.TryParse(updatedBy, out var parsed))
                 updatedByGuid = parsed;
             
-            // Parse IsActive
             bool isActive = string.Equals(request.IsActive, "true", StringComparison.OrdinalIgnoreCase);
             
             using var transaction = await _context.Database.BeginTransactionAsync();
             
             try
             {
-                // Update permission
                 permission.Name = request.Name;
                 permission.GuardName = request.GuardName;
                 permission.IsActive = isActive;
@@ -223,13 +206,9 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 permission.UpdatedBy = updatedByGuid;
                 
                 _repo.UpdatePermission(permission);
-                
-                // Update roles
                 await _repo.AssignRolesToPermissionAsync(permission.Id, request.Roles);
-                
                 await _repo.SaveChangesAsync();
                 
-                // Log the action
                 var afterSnapshot = new
                 {
                     permission.Id,
@@ -263,28 +242,21 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         public async Task<(bool Success, string Message, string DeleteType)> DeletePermissionAsync(Guid id, bool permanent, string? currentUserId)
         {
-            var permission = await _repo.GetPermissionByIdAsync(id);
+            var permission = await _repo.GetPermissionByIdIncludingDeletedAsync(id);
             if (permission == null)
                 return (false, "Permission not found", "none");
-            
-            if (permission.IsDeleted)
-                return (false, "Permission is already deleted", "none");
-            
-            // Check if permission can be permanently deleted
-            string deleteType = "soft";
-            if (permanent)
-            {
-                var hasRelatedRecords = await _repo.PermissionHasRelatedRecordsAsync(id);
-                
-                if (!hasRelatedRecords)
-                {
-                    deleteType = "permanent";
-                }
-            }
             
             Guid? deletedBy = null;
             if (!string.IsNullOrEmpty(currentUserId) && Guid.TryParse(currentUserId, out var parsed))
                 deletedBy = parsed;
+            
+            string deleteType = "soft";
+            
+            if (permanent)
+            {
+                // No check for related records - always allow permanent delete
+                deleteType = "permanent";
+            }
             
             using var transaction = await _context.Database.BeginTransactionAsync();
             
@@ -293,7 +265,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 await _repo.DeletePermissionAsync(id, deleteType == "permanent", deletedBy);
                 await _repo.SaveChangesAsync();
                 
-                // Log the action
                 await _userLogHelper.LogAsync(
                     userId: deletedBy ?? Guid.Empty,
                     actionType: "Delete",
@@ -354,22 +325,35 @@ namespace shop_back.src.Shared.Infrastructure.Services
             return (true, "Permission restored successfully");
         }
 
-        public async Task<(bool Success, string Message, bool CanBePermanent)> CheckDeleteEligibilityAsync(Guid id)
+        public async Task<DeleteEligibilityResponse> CheckDeleteEligibilityAsync(Guid id)
         {
-            var permission = await _repo.GetPermissionByIdAsync(id);
+            var permission = await _repo.GetPermissionByIdIncludingDeletedAsync(id);
             if (permission == null)
-                return (false, "Permission not found", false);
+                return new DeleteEligibilityResponse 
+                { 
+                    Success = false, 
+                    Message = "Permission not found", 
+                    CanBePermanent = false,
+                    HasRelatedRecords = false
+                };
             
             if (permission.IsDeleted)
-                return (false, "Permission is already deleted", false);
+                return new DeleteEligibilityResponse 
+                { 
+                    Success = true, 
+                    Message = "Permission is in trash and can be permanently deleted. All related role and user assignments will be removed automatically.", 
+                    CanBePermanent = true,
+                    HasRelatedRecords = false
+                };
             
-            var hasRelatedRecords = await _repo.PermissionHasRelatedRecordsAsync(id);
-            bool canBePermanent = !hasRelatedRecords;
-            string message = canBePermanent
-                ? "Permission can be permanently deleted"
-                : "Permission must be soft deleted due to existing related records";
-            
-            return (true, message, canBePermanent);
+            // Always allow permanent delete with auto-cleanup of relations
+            return new DeleteEligibilityResponse
+            {
+                Success = true,
+                Message = "Permission can be permanently deleted. Any assigned roles and user assignments will be automatically removed.",
+                CanBePermanent = true,
+                HasRelatedRecords = false
+            };
         }
     }
 }

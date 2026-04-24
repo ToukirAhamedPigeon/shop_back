@@ -25,35 +25,30 @@ namespace shop_back.src.Shared.Application.Repositories
         Task<string[]> GetPermissionsByRolesAsync(IEnumerable<string> roleNames);
         Task SetPermissionsForUserAsync(Guid userId, IEnumerable<string> permissionNames);
 
-        // New methods for Role CRUD
+        // Role CRUD methods
         Task<(IEnumerable<RoleDto> Roles, int TotalCount, int GrandTotalCount, int PageIndex, int PageSize)> GetFilteredRolesAsync(RolePermissionFilterRequest req);
         Task<Role?> GetRoleByIdAsync(Guid id);
+        Task<Role?> GetRoleByIdIncludingDeletedAsync(Guid id);
         Task<bool> RoleExistsAsync(string name, Guid? ignoreId = null);
         Task<Role> CreateRoleAsync(Role role);
-        
-        // Change these from Task to void
-        void UpdateRole(Role role);  // Was: Task UpdateRoleAsync(Role role);
-        
+        void UpdateRole(Role role);
         Task DeleteRoleAsync(Guid id, bool permanent, Guid? deletedBy);
         Task<bool> RoleHasRelatedRecordsAsync(Guid roleId);
         Task AssignPermissionsToRoleAsync(Guid roleId, IEnumerable<string> permissionNames);
         Task<string[]> GetPermissionsByRoleNamesAsync(IEnumerable<string> roleNames);
         
-        // New methods for Permission CRUD
+        // Permission CRUD methods
         Task<(IEnumerable<PermissionDto> Permissions, int TotalCount, int GrandTotalCount, int PageIndex, int PageSize)> GetFilteredPermissionsAsync(RolePermissionFilterRequest req);
         Task<Permission?> GetPermissionByIdAsync(Guid id);
+        Task<Permission?> GetPermissionByIdIncludingDeletedAsync(Guid id);
         Task<bool> PermissionExistsAsync(string name, Guid? ignoreId = null);
         Task<Permission> CreatePermissionAsync(Permission permission);
-        
-        // Change these from Task to void
-        void UpdatePermission(Permission permission);  // Was: Task UpdatePermissionAsync(Permission permission);
-        
+        void UpdatePermission(Permission permission);
         Task DeletePermissionAsync(Guid id, bool permanent, Guid? deletedBy);
         Task<bool> PermissionHasRelatedRecordsAsync(Guid permissionId);
         Task AssignRolesToPermissionAsync(Guid permissionId, IEnumerable<string> roleNames);
         Task<string[]> GetRolesByPermissionNamesAsync(IEnumerable<string> permissionNames);
         
-        // Add SaveChangesAsync method
         Task SaveChangesAsync();
     }
 }
