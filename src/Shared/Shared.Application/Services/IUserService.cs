@@ -1,7 +1,8 @@
-// src/Shared/Application/Services/IUserService.cs - Updated
+// src/Shared/Application/Services/IUserService.cs
 
 using shop_back.src.Shared.Application.DTOs.Auth;
 using shop_back.src.Shared.Application.DTOs.Users;
+using shop_back.src.Shared.Application.DTOs.Common;
 
 namespace shop_back.src.Shared.Application.Services
 {
@@ -29,7 +30,10 @@ namespace shop_back.src.Shared.Application.Services
             Guid id, 
             string? currentUserId);
             
-        // NEW: Enhanced check with details
         Task<DeleteEligibilityResponse> CheckDeleteEligibilityAsync(Guid id);
+        
+        // Bulk operations
+        Task<BulkOperationResponse> BulkDeleteAsync(List<Guid> ids, bool permanent, string? currentUserId);
+        Task<BulkOperationResponse> BulkRestoreAsync(List<Guid> ids, string? currentUserId);
     }
 }

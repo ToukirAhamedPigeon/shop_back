@@ -4,6 +4,7 @@ using shop_back.src.Shared.Application.DTOs.Users;
 using shop_back.src.Shared.Application.DTOs.Auth;
 using shop_back.src.Shared.Application.Repositories;
 using shop_back.src.Shared.Application.Services;
+using shop_back.src.Shared.Application.DTOs.Common;
 using shop_back.src.Shared.Infrastructure.Helpers; 
 using QRCoder;
 using SixLabors.ImageSharp;
@@ -569,7 +570,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 deletedBy = parsed;
             
             string deleteType = "soft";
-            List<ForeignKeyConstraint> blockingConstraints = new();
+            List<string> blockingTables = new();
             
             if (permanent)
             {
@@ -583,50 +584,11 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     var (hasRelatedRecords, details) = await _repo.HasRelatedRecordsWithDetailsAsync(id);
                     var hasVerifiedEmail = await _repo.HasVerifiedEmailAsync(id);
                     
-                    // Build detailed constraint information only for critical tables
-                    if (details.HasRefreshTokens)
-                    {
-                        blockingConstraints.Add(new ForeignKeyConstraint
-                        {
-                            TableName = "refresh_tokens",
-                            ColumnName = "user_id",
-                            ConstraintName = "refresh_tokens_user_id_fkey",
-                            RecordCount = details.RefreshTokensCount
-                        });
-                    }
-                    
-                    if (details.HasPasswordResets)
-                    {
-                        blockingConstraints.Add(new ForeignKeyConstraint
-                        {
-                            TableName = "password_resets",
-                            ColumnName = "user_id",
-                            ConstraintName = "password_resets_user_id_fkey",
-                            RecordCount = details.PasswordResetsCount
-                        });
-                    }
-                    
-                    if (details.HasUserTableCombinations)
-                    {
-                        blockingConstraints.Add(new ForeignKeyConstraint
-                        {
-                            TableName = "user_table_combinations",
-                            ColumnName = "user_id / updated_by",
-                            ConstraintName = "user_table_combinations_user_id_fkey",
-                            RecordCount = details.UserTableCombinationsCount
-                        });
-                    }
-                    
-                    if (hasVerifiedEmail)
-                    {
-                        blockingConstraints.Add(new ForeignKeyConstraint
-                        {
-                            TableName = "users",
-                            ColumnName = "email_verified_at",
-                            ConstraintName = "email_verification",
-                            RecordCount = 1
-                        });
-                    }
+                    // Build blocking tables list
+                    if (details.HasRefreshTokens) blockingTables.Add("Refresh Tokens");
+                    if (details.HasPasswordResets) blockingTables.Add("Password Resets");
+                    if (details.HasUserTableCombinations) blockingTables.Add("User Table Combinations");
+                    if (hasVerifiedEmail) blockingTables.Add("Email Verification");
                     
                     if (!hasRelatedRecords && !hasVerifiedEmail)
                     {
@@ -650,7 +612,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                                 userId = id,
                                 attemptedPermanent = true,
                                 reasons = reasons,
-                                blockingConstraints = blockingConstraints
+                                blockingTables = blockingTables
                             }),
                             modelName: "User",
                             modelId: id.ToString()
@@ -666,7 +628,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
             {
                 if (deleteType == "permanent")
                 {
-                    // HardDeleteAsync will NOT create its own transaction
                     await _repo.HardDeleteAsync(id);
                     
                     await _userLogHelper.LogAsync(
@@ -701,7 +662,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     );
                 }
                 
-                // Save all changes at once
                 await _repo.SaveChangesAsync();
                 await transaction.CommitAsync();
                 
@@ -715,74 +675,26 @@ namespace shop_back.src.Shared.Infrastructure.Services
             {
                 await transaction.RollbackAsync();
                 
-                // Extract foreign key violation details
                 string errorMessage = ex.Message;
-                List<ForeignKeyConstraint> failedConstraints = new();
+                List<string> failedConstraints = new();
                 
                 if (ex.InnerException?.Message?.Contains("violates foreign key constraint") == true)
                 {
                     var innerMessage = ex.InnerException.Message;
                     if (innerMessage.Contains("refresh_tokens_user_id_fkey"))
                     {
-                        failedConstraints.Add(new ForeignKeyConstraint
-                        {
-                            TableName = "refresh_tokens",
-                            ColumnName = "user_id",
-                            ConstraintName = "refresh_tokens_user_id_fkey",
-                            RecordCount = await _context.RefreshTokens.CountAsync(rt => rt.UserId == id)
-                        });
+                        failedConstraints.Add("Refresh Tokens");
                     }
                     if (innerMessage.Contains("password_resets_user_id_fkey"))
                     {
-                        failedConstraints.Add(new ForeignKeyConstraint
-                        {
-                            TableName = "password_resets",
-                            ColumnName = "user_id",
-                            ConstraintName = "password_resets_user_id_fkey",
-                            RecordCount = await _context.PasswordResets.CountAsync(pr => pr.UserId == id)
-                        });
+                        failedConstraints.Add("Password Resets");
                     }
                     
-                    errorMessage = $"Cannot delete user due to existing related records in: {string.Join(", ", failedConstraints.Select(c => c.TableName))}";
+                    errorMessage = $"Cannot delete user due to existing related records in: {string.Join(", ", failedConstraints)}";
                 }
                 
                 return (false, errorMessage, "none");
             }
-        }
-
-        public async Task<(bool Success, string Message)> RestoreUserAsync(Guid id, string? currentUserId)
-        {
-            var user = await _context.Users.IgnoreQueryFilters()
-                .FirstOrDefaultAsync(u => u.Id == id && u.IsDeleted);
-            
-            if (user == null)
-                return (false, "User not found or not deleted");
-            
-            Guid? restoredBy = null;
-            if (!string.IsNullOrEmpty(currentUserId) && Guid.TryParse(currentUserId, out var parsed))
-                restoredBy = parsed;
-            
-            user.IsDeleted = false;
-            user.DeletedAt = null;
-            user.UpdatedBy = restoredBy;
-            user.UpdatedAt = DateTime.UtcNow;
-            
-            await _repo.UpdateAsync(user);
-            await _repo.SaveChangesAsync();
-            
-            await _userLogHelper.LogAsync(
-                userId: restoredBy ?? id,
-                actionType: "Restore",
-                detail: $"User '{user.Username}' was restored",
-                changes: JsonConvert.SerializeObject(new { 
-                    before = new { IsDeleted = true, DeletedAt = user.DeletedAt },
-                    after = new { IsDeleted = false, RestoredBy = restoredBy?.ToString(), RestoredAt = DateTime.UtcNow }
-                }),
-                modelName: "User",
-                modelId: id.ToString()
-            );
-            
-            return (true, "User restored successfully");
         }
 
         public async Task<DeleteEligibilityResponse> CheckDeleteEligibilityAsync(Guid id)
@@ -823,62 +735,11 @@ namespace shop_back.src.Shared.Infrastructure.Services
             
             bool canBePermanent = !hasRelatedRecords && !hasVerifiedEmail;
             
-            List<ForeignKeyConstraint> blockingConstraints = new();
-            
-            if (details.HasUserLogs)
-            {
-                blockingConstraints.Add(new ForeignKeyConstraint
-                {
-                    TableName = "user_logs",
-                    ColumnName = "created_by",
-                    ConstraintName = "user_logs_created_by_fkey",
-                    RecordCount = details.UserLogsCount
-                });
-            }
-            
-            if (details.HasRefreshTokens)
-            {
-                blockingConstraints.Add(new ForeignKeyConstraint
-                {
-                    TableName = "refresh_tokens",
-                    ColumnName = "user_id",
-                    ConstraintName = "refresh_tokens_user_id_fkey",
-                    RecordCount = details.RefreshTokensCount
-                });
-            }
-            
-            if (details.HasPasswordResets)
-            {
-                blockingConstraints.Add(new ForeignKeyConstraint
-                {
-                    TableName = "password_resets",
-                    ColumnName = "user_id",
-                    ConstraintName = "password_resets_user_id_fkey",
-                    RecordCount = details.PasswordResetsCount
-                });
-            }
-            
-            if (details.HasUserTableCombinations)
-            {
-                blockingConstraints.Add(new ForeignKeyConstraint
-                {
-                    TableName = "user_table_combinations",
-                    ColumnName = "user_id / updated_by",
-                    ConstraintName = "user_table_combinations_user_id_fkey",
-                    RecordCount = details.UserTableCombinationsCount
-                });
-            }
-            
-            if (details.HasMails)
-            {
-                blockingConstraints.Add(new ForeignKeyConstraint
-                {
-                    TableName = "mails",
-                    ColumnName = "created_by",
-                    ConstraintName = "mail_created_by_fkey",
-                    RecordCount = details.MailsCount
-                });
-            }
+            var blockingTables = new List<string>();
+            if (details.HasRefreshTokens) blockingTables.Add("Refresh Tokens");
+            if (details.HasPasswordResets) blockingTables.Add("Password Resets");
+            if (details.HasUserTableCombinations) blockingTables.Add("User Table Combinations");
+            if (hasVerifiedEmail) blockingTables.Add("Email Verification");
             
             string message;
             if (canBePermanent)
@@ -889,11 +750,9 @@ namespace shop_back.src.Shared.Infrastructure.Services
             {
                 var reasons = new List<string>();
                 if (hasVerifiedEmail) reasons.Add("has verified email");
-                if (details.HasUserLogs) reasons.Add($"has {details.UserLogsCount} user log(s)");
                 if (details.HasRefreshTokens) reasons.Add($"has {details.RefreshTokensCount} refresh token(s)");
                 if (details.HasPasswordResets) reasons.Add($"has {details.PasswordResetsCount} password reset(s)");
                 if (details.HasUserTableCombinations) reasons.Add($"has {details.UserTableCombinationsCount} table combination(s)");
-                if (details.HasMails) reasons.Add($"has {details.MailsCount} mail(s)");
                 
                 message = $"User must be soft deleted because they: {string.Join(", ", reasons)}";
             }
@@ -906,8 +765,113 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 HasRelatedRecords = hasRelatedRecords,
                 HasVerifiedEmail = hasVerifiedEmail,
                 RelatedRecordsDetails = details,
-                BlockingConstraints = blockingConstraints
+                BlockingTables = blockingTables
             };
+        }
+
+        public async Task<(bool Success, string Message)> RestoreUserAsync(Guid id, string? currentUserId)
+        {
+            var user = await _context.Users.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Id == id && u.IsDeleted);
+            
+            if (user == null)
+                return (false, "User not found or not deleted");
+            
+            Guid? restoredBy = null;
+            if (!string.IsNullOrEmpty(currentUserId) && Guid.TryParse(currentUserId, out var parsed))
+                restoredBy = parsed;
+            
+            user.IsDeleted = false;
+            user.DeletedAt = null;
+            user.UpdatedBy = restoredBy;
+            user.UpdatedAt = DateTime.UtcNow;
+            
+            await _repo.UpdateAsync(user);
+            await _repo.SaveChangesAsync();
+            
+            await _userLogHelper.LogAsync(
+                userId: restoredBy ?? id,
+                actionType: "Restore",
+                detail: $"User '{user.Username}' was restored",
+                changes: JsonConvert.SerializeObject(new { 
+                    before = new { IsDeleted = true, DeletedAt = user.DeletedAt },
+                    after = new { IsDeleted = false, RestoredBy = restoredBy?.ToString(), RestoredAt = DateTime.UtcNow }
+                }),
+                modelName: "User",
+                modelId: id.ToString()
+            );
+            
+            return (true, "User restored successfully");
+        }
+
+        public async Task<BulkOperationResponse> BulkDeleteAsync(List<Guid> ids, bool permanent, string? currentUserId)
+        {
+            var response = new BulkOperationResponse
+            {
+                TotalCount = ids.Count,
+                SuccessCount = 0,
+                FailedCount = 0,
+                Success = true
+            };
+            
+            foreach (var id in ids)
+            {
+                var result = await DeleteUserAsync(id, permanent, currentUserId);
+                
+                if (result.Success)
+                {
+                    response.SuccessCount++;
+                }
+                else
+                {
+                    response.FailedCount++;
+                    response.Errors.Add(new BulkOperationError
+                    {
+                        Id = id,
+                        Error = result.Message
+                    });
+                    response.Success = false;
+                }
+            }
+            
+            response.Message = $"Processed {response.TotalCount} users. Success: {response.SuccessCount}, Failed: {response.FailedCount}";
+            
+            return response;
+        }
+
+        public async Task<BulkOperationResponse> BulkRestoreAsync(List<Guid> ids, string? currentUserId)
+        {
+            var response = new BulkOperationResponse
+            {
+                TotalCount = ids.Count,
+                SuccessCount = 0,
+                FailedCount = 0,
+                Success = true
+            };
+            
+            foreach (var id in ids)
+            {
+                var result = await RestoreUserAsync(id, currentUserId);
+                
+                if (result.Success)
+                {
+                    response.SuccessCount++;
+                }
+                else
+                {
+                    response.FailedCount++;
+                    response.Errors.Add(new BulkOperationError
+                    {
+                        Id = id,
+                        Error = result.Message
+                    });
+                    response.Success = false;
+                }
+            }
+            
+            response.Message = $"Processed {response.TotalCount} users. Success: {response.SuccessCount}, Failed: {response.FailedCount}";
+            
+            return response;
         }
     }
 }

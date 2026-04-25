@@ -1,6 +1,9 @@
+// src/Shared/API/Controllers/UserController.cs
+
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Mvc;
 using shop_back.src.Shared.Application.DTOs.Users;
+using shop_back.src.Shared.Application.DTOs.Common;
 using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Infrastructure.Services.Authorization;
 using Microsoft.AspNetCore.Authorization;
@@ -75,7 +78,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [Authorize]
         [HasPermissionAny("update-admin-users")]
-        [HttpPost("{id}/regenerate-qr")]  // Make sure this matches
+        [HttpPost("{id}/regenerate-qr")]
         public async Task<IActionResult> RegenerateQr(Guid id)
         {
             var currentUserId = User?.FindFirst("UserId")?.Value 
@@ -109,7 +112,6 @@ namespace shop_back.src.Shared.API.Controllers
 
             var result = await _service.UpdateUserAsync(id, request, currentUserId);
 
-            // Return proper JSON response
             if (result.Success)
             {
                 return Ok(new { success = true, message = result.Message });
@@ -214,6 +216,64 @@ namespace shop_back.src.Shared.API.Controllers
                 hasVerifiedEmail = result.HasVerifiedEmail,
                 relatedRecordsDetails = result.RelatedRecordsDetails
             });
+        }
+
+        [Authorize]
+        [HttpPost("bulk-delete")]
+        [HasPermissionAny("delete-admin-users")]
+        public async Task<IActionResult> BulkDelete([FromBody] BulkOperationRequest request)
+        {
+            // Validate and convert IDs
+            var (isValid, invalidIds) = request.ValidateIds();
+            
+            if (!isValid)
+            {
+                return BadRequest(new 
+                { 
+                    success = false, 
+                    message = $"Invalid GUID format for IDs: {string.Join(", ", invalidIds)}" 
+                });
+            }
+            
+            var guids = request.GetGuids();
+            var currentUserId = User?.FindFirst("UserId")?.Value 
+                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            
+            var result = await _service.BulkDeleteAsync(guids, request.Permanent, currentUserId);
+            
+            if (!result.Success)
+                return BadRequest(result);
+            
+            return Ok(result);
+        }
+
+        [Authorize]
+        [HttpPost("bulk-restore")]
+        [HasPermissionAny("restore-admin-users")]
+        public async Task<IActionResult> BulkRestore([FromBody] BulkOperationRequest request)
+        {
+            // Validate and convert IDs
+            var (isValid, invalidIds) = request.ValidateIds();
+            
+            if (!isValid)
+            {
+                return BadRequest(new 
+                { 
+                    success = false, 
+                    message = $"Invalid GUID format for IDs: {string.Join(", ", invalidIds)}" 
+                });
+            }
+            
+            var guids = request.GetGuids();
+            var currentUserId = User?.FindFirst("UserId")?.Value 
+                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            
+            var result = await _service.BulkRestoreAsync(guids, currentUserId);
+            
+            if (!result.Success)
+                return BadRequest(result);
+            
+            return Ok(result);
         }
     }
 }

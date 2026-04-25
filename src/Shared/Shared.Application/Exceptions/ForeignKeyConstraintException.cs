@@ -15,12 +15,4 @@ namespace shop_back.src.Shared.Application.Exceptions
             BlockingTables = blockingTables;
         }
     }
-
-    public class ForeignKeyConstraint
-    {
-        public string TableName { get; set; } = string.Empty;
-        public string ColumnName { get; set; } = string.Empty;
-        public string ConstraintName { get; set; } = string.Empty;
-        public int RecordCount { get; set; }
-    }
 }
