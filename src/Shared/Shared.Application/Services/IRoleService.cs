@@ -15,5 +15,9 @@ namespace shop_back.src.Shared.Application.Services
         Task<(bool Success, string Message, string DeleteType)> DeleteRoleAsync(Guid id, bool permanent, string? currentUserId);
         Task<(bool Success, string Message)> RestoreRoleAsync(Guid id, string? currentUserId);
         Task<DeleteEligibilityResponse> CheckDeleteEligibilityAsync(Guid id);
+
+        // Bulk operations for Roles
+        Task<BulkOperationResponse> BulkDeleteRolesAsync(List<Guid> ids, bool permanent, string? currentUserId);
+        Task<BulkOperationResponse> BulkRestoreRolesAsync(List<Guid> ids, string? currentUserId);
     }
 }

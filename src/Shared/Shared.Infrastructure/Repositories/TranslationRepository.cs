@@ -4,6 +4,7 @@ using shop_back.src.Shared.Infrastructure.Data;
 using shop_back.src.Shared.Domain.Entities;
 using shop_back.src.Shared.Application.DTOs.Translations;
 using System.Text.Json;
+using shop_back.src.Shared.Application.DTOs.Common;
 
 namespace shop_back.src.Shared.Infrastructure.Repositories
 {
@@ -339,6 +340,74 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 .Distinct()
                 .OrderBy(m => m)
                 .ToListAsync(ct);
+        }
+        public async Task<BulkOperationResponse> BulkDeleteTranslationsAsync(List<long> ids, Guid? deletedBy, CancellationToken ct = default)
+        {
+            var response = new BulkOperationResponse
+            {
+                TotalCount = ids.Count,
+                SuccessCount = 0,
+                FailedCount = 0,
+                Success = true
+            };
+
+            using var transaction = await _context.Database.BeginTransactionAsync(ct);
+
+            try
+            {
+                foreach (var id in ids)
+                {
+                    try
+                    {
+                        var translationKey = await _context.TranslationKeys
+                            .Include(k => k.Values)
+                            .FirstOrDefaultAsync(k => k.Id == id, ct);
+
+                        if (translationKey == null)
+                        {
+                            response.FailedCount++;
+                            response.Errors.Add(new BulkOperationError
+                            {
+                                Id = Guid.NewGuid(), // Use new GUID since translation uses long
+                                Error = $"Translation with id {id} not found"
+                            });
+                            response.Success = false;
+                            continue;
+                        }
+
+                        // Remove translation values
+                        _context.TranslationValues.RemoveRange(translationKey.Values);
+                        
+                        // Remove translation key
+                        _context.TranslationKeys.Remove(translationKey);
+
+                        response.SuccessCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        response.FailedCount++;
+                        response.Errors.Add(new BulkOperationError
+                        {
+                            Id = Guid.NewGuid(),
+                            Error = ex.Message
+                        });
+                        response.Success = false;
+                    }
+                }
+
+                await _context.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+
+                response.Message = $"Processed {response.TotalCount} translations. Success: {response.SuccessCount}, Failed: {response.FailedCount}";
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync(ct);
+                response.Success = false;
+                response.Message = $"Bulk operation failed: {ex.Message}";
+            }
+
+            return response;
         }
     }
 }

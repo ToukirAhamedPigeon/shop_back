@@ -7,6 +7,7 @@ using shop_back.src.Shared.Domain.Entities;
 using shop_back.src.Shared.Application.DTOs.Options;
 using shop_back.src.Shared.Application.Repositories;
 using shop_back.src.Shared.Infrastructure.Data;
+using shop_back.src.Shared.Application.DTOs.Common;
 
 namespace shop_back.src.Shared.Infrastructure.Repositories
 {
@@ -154,38 +155,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             _context.Options.Update(option);
         }
 
-        public async Task DeleteOptionAsync(Guid id, bool permanent, Guid? deletedBy)
-        {
-            var option = await _context.Options.FindAsync(id);
-            if (option == null) return;
-            
-            if (permanent)
-            {
-                // First, update children to remove parent reference
-                var children = await _context.Options
-                    .Where(o => o.ParentId == id)
-                    .ToListAsync();
-                
-                foreach (var child in children)
-                {
-                    child.ParentId = null;
-                    child.HasChild = false;
-                    child.UpdatedAt = DateTime.UtcNow;
-                    child.UpdatedBy = deletedBy;
-                }
-                
-                _context.Options.Remove(option);
-            }
-            else
-            {
-                option.IsDeleted = true;
-                option.DeletedAt = DateTime.UtcNow;
-                option.UpdatedAt = DateTime.UtcNow;
-                option.UpdatedBy = deletedBy;
-                option.DeletedBy = deletedBy;
-            }
-        }
-
         public async Task<bool> OptionHasChildrenAsync(Guid optionId)
         {
             return await _context.Options
@@ -215,5 +184,235 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
         {
             await _context.SaveChangesAsync();
         }
+        // Add these methods at the end of the class:
+        public async Task DeleteOptionAsync(Guid id, bool permanent, Guid? deletedBy)
+        {
+            // IMPORTANT: Use IgnoreQueryFilters to get even deleted records
+            var option = await _context.Options
+                .IgnoreQueryFilters()
+                .Include(o => o.Children)
+                .FirstOrDefaultAsync(o => o.Id == id);
+                
+            if (option == null) return;
+            
+            // Safely check for children - handle null collection
+            var children = option.Children ?? new List<Option>();
+            var hasActiveChildren = children.Any(c => !c.IsDeleted);
+            
+            if (permanent)
+            {
+                // For permanent delete, we must have no active children
+                if (hasActiveChildren)
+                {
+                    var activeChildrenCount = children.Count(c => !c.IsDeleted);
+                    throw new InvalidOperationException($"Cannot permanently delete option '{option.Name}' because it has {activeChildrenCount} active child option(s). Please delete all child options first.");
+                }
+                
+                // Also handle soft-deleted children - optionally delete them too
+                var hasSoftDeletedChildren = children.Any(c => c.IsDeleted);
+                if (hasSoftDeletedChildren)
+                {
+                    // Delete all soft-deleted children permanently
+                    var softDeletedChildren = children.Where(c => c.IsDeleted).ToList();
+                    foreach (var child in softDeletedChildren)
+                    {
+                        _context.Options.Remove(child);
+                    }
+                }
+                
+                _context.Options.Remove(option);
+            }
+            else
+            {
+                // For soft delete, we can soft delete even with children
+                option.IsDeleted = true;
+                option.DeletedAt = DateTime.UtcNow;
+                option.UpdatedAt = DateTime.UtcNow;
+                option.UpdatedBy = deletedBy;
+                option.DeletedBy = deletedBy;
+                
+                // Also update parent's HasChild flag
+                if (option.ParentId.HasValue)
+                {
+                    var parent = await _context.Options
+                        .IgnoreQueryFilters()
+                        .FirstOrDefaultAsync(o => o.Id == option.ParentId.Value);
+                    
+                    if (parent != null)
+                    {
+                        var remainingActiveChildren = await _context.Options
+                            .CountAsync(o => o.ParentId == parent.Id && !o.IsDeleted);
+                        parent.HasChild = remainingActiveChildren > 0;
+                        parent.UpdatedAt = DateTime.UtcNow;
+                        parent.UpdatedBy = deletedBy;
+                    }
+                }
+            }
+        }
+
+        // Updated BulkDeleteOptionsAsync with child check
+        public async Task<BulkOperationResponse> BulkDeleteOptionsAsync(List<Guid> ids, bool permanent, Guid? deletedBy)
+        {
+            var response = new BulkOperationResponse
+            {
+                TotalCount = ids.Count,
+                SuccessCount = 0,
+                FailedCount = 0,
+                Success = true
+            };
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                foreach (var id in ids)
+                {
+                    try
+                    {
+                        var option = await _context.Options
+                            .Include(o => o.Children)
+                            .IgnoreQueryFilters()
+                            .FirstOrDefaultAsync(o => o.Id == id);
+
+                        if (option == null)
+                        {
+                            response.FailedCount++;
+                            response.Errors.Add(new BulkOperationError
+                            {
+                                Id = id,
+                                Error = "Option not found"
+                            });
+                            response.Success = false;
+                            continue;
+                        }
+
+                        // Check for children
+                        var hasChildren = option.Children != null && option.Children.Any(c => !c.IsDeleted);
+                        
+                        if (permanent)
+                        {
+                            // For permanent delete, cannot have children
+                            if (hasChildren)
+                            {
+                                response.FailedCount++;
+                                response.Errors.Add(new BulkOperationError
+                                {
+                                    Id = id,
+                                    Error = $"Cannot permanently delete option '{option.Name}' because it has child options. Please delete all child options first."
+                                });
+                                response.Success = false;
+                                continue;
+                            }
+                            
+                            _context.Options.Remove(option);
+                        }
+                        else
+                        {
+                            // Soft delete - allowed even with children
+                            option.IsDeleted = true;
+                            option.DeletedAt = DateTime.UtcNow;
+                            option.UpdatedAt = DateTime.UtcNow;
+                            option.UpdatedBy = deletedBy;
+                            option.DeletedBy = deletedBy;
+                        }
+
+                        response.SuccessCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        response.FailedCount++;
+                        response.Errors.Add(new BulkOperationError
+                        {
+                            Id = id,
+                            Error = ex.Message
+                        });
+                        response.Success = false;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                response.Message = $"Processed {response.TotalCount} options. Success: {response.SuccessCount}, Failed: {response.FailedCount}";
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                response.Success = false;
+                response.Message = $"Bulk operation failed: {ex.Message}";
+            }
+
+            return response;
+        }
+
+        public async Task<BulkOperationResponse> BulkRestoreOptionsAsync(List<Guid> ids, Guid? restoredBy)
+        {
+            var response = new BulkOperationResponse
+            {
+                TotalCount = ids.Count,
+                SuccessCount = 0,
+                FailedCount = 0,
+                Success = true
+            };
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                foreach (var id in ids)
+                {
+                    try
+                    {
+                        var option = await _context.Options
+                            .IgnoreQueryFilters()
+                            .FirstOrDefaultAsync(o => o.Id == id && o.IsDeleted);
+
+                        if (option == null)
+                        {
+                            response.FailedCount++;
+                            response.Errors.Add(new BulkOperationError
+                            {
+                                Id = id,
+                                Error = "Option not found or not deleted"
+                            });
+                            response.Success = false;
+                            continue;
+                        }
+
+                        option.IsDeleted = false;
+                        option.DeletedAt = null;
+                        option.DeletedBy = null;
+                        option.UpdatedBy = restoredBy;
+                        option.UpdatedAt = DateTime.UtcNow;
+
+                        response.SuccessCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        response.FailedCount++;
+                        response.Errors.Add(new BulkOperationError
+                        {
+                            Id = id,
+                            Error = ex.Message
+                        });
+                        response.Success = false;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                response.Message = $"Processed {response.TotalCount} options. Success: {response.SuccessCount}, Failed: {response.FailedCount}";
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                response.Success = false;
+                response.Message = $"Bulk restore failed: {ex.Message}";
+            }
+
+            return response;
+        }
+
     }
 }

@@ -499,137 +499,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
             }
         }
 
-        public async Task<(bool Success, string Message, string DeleteType)> DeleteOptionAsync(Guid id, bool permanent, string? currentUserId)
-        {
-            var option = await _optionRepository.GetOptionByIdIncludingDeletedAsync(id);
-            if (option == null)
-                return (false, "Option not found", "none");
-            
-            // Check if option has children (for permanent delete)
-            var hasChildren = await _optionRepository.OptionHasChildrenAsync(id);
-            var childrenCount = await _optionRepository.GetChildrenCountAsync(id);
-            
-            string deleteType = "soft";
-            
-            if (permanent)
-            {
-                if (option.IsDeleted)
-                {
-                    // Already in trash, can permanently delete
-                    deleteType = "permanent";
-                }
-                else if (hasChildren)
-                {
-                    // Has children - cannot permanently delete
-                    return (false, $"Cannot permanently delete option '{option.Name}' because it has {childrenCount} child option(s). Please delete or reassign children first.", "none");
-                }
-                else
-                {
-                    // No children - can permanently delete
-                    deleteType = "permanent";
-                }
-            }
-            
-            Guid? deletedBy = null;
-            if (!string.IsNullOrEmpty(currentUserId) && Guid.TryParse(currentUserId, out var parsed))
-                deletedBy = parsed;
-            
-            using var transaction = await _context.Database.BeginTransactionAsync();
-            
-            try
-            {
-                await _optionRepository.DeleteOptionAsync(id, deleteType == "permanent", deletedBy);
-                await _optionRepository.SaveChangesAsync();
-                
-                // If soft delete and this option had a parent, update parent's HasChild flag
-                if (deleteType == "soft" && option.ParentId.HasValue && !option.IsDeleted)
-                {
-                    var parent = await _optionRepository.GetOptionByIdAsync(option.ParentId.Value);
-                    if (parent != null)
-                    {
-                        var remainingChildren = await _optionRepository.GetChildrenCountAsync(option.ParentId.Value);
-                        if (remainingChildren == 0)
-                        {
-                            parent.HasChild = false;
-                            parent.UpdatedAt = DateTime.UtcNow;
-                            parent.UpdatedBy = deletedBy;
-                            _optionRepository.UpdateOption(parent);
-                            await _optionRepository.SaveChangesAsync();
-                        }
-                    }
-                }
-                
-                // Clear cache after delete
-                await ClearOptionsCacheAsync();
-                
-                // Log the action
-                await _userLogHelper.LogAsync(
-                    userId: deletedBy ?? Guid.Empty,
-                    actionType: "Delete",
-                    detail: $"Option '{option.Name}' was {(deleteType == "permanent" ? "permanently" : "soft")} deleted. Children affected: {childrenCount}",
-                    changes: Newtonsoft.Json.JsonConvert.SerializeObject(new
-                    {
-                        before = new { option.Id, option.Name, option.ParentId, option.HasChild, option.IsActive, option.IsDeleted },
-                        after = new { IsDeleted = true, DeletedAt = DateTime.UtcNow, DeleteType = deleteType }
-                    }),
-                    modelName: "Option",
-                    modelId: option.Id.ToString()
-                );
-                
-                await transaction.CommitAsync();
-                
-                return (true, $"Option {(deleteType == "permanent" ? "permanently" : "soft")} deleted successfully", deleteType);
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                return (false, $"Error deleting option: {ex.Message}", "none");
-            }
-        }
-
-        public async Task<DeleteOptionInfoDto> CheckDeleteEligibilityAsync(Guid id)
-        {
-            var option = await _optionRepository.GetOptionByIdIncludingDeletedAsync(id);
-            if (option == null)
-                return new DeleteOptionInfoDto { 
-                    CanBePermanent = false, 
-                    Message = "Option not found", 
-                    HasChildren = false, 
-                    ChildrenCount = 0 
-                };
-            
-            if (option.IsDeleted)
-                return new DeleteOptionInfoDto { 
-                    CanBePermanent = true, 
-                    Message = "Option is in trash and can be permanently deleted", 
-                    HasChildren = false, 
-                    ChildrenCount = 0 
-                };
-            
-            var hasChildren = await _optionRepository.OptionHasChildrenAsync(id);
-            var childrenCount = await _optionRepository.GetChildrenCountAsync(id);
-            
-            bool canBePermanent = !hasChildren;
-            string message;
-            
-            if (canBePermanent)
-            {
-                message = "Option has no children and can be permanently deleted";
-            }
-            else
-            {
-                message = $"Option has {childrenCount} child option(s) and cannot be permanently deleted. Please delete or reassign children first.";
-            }
-            
-            return new DeleteOptionInfoDto
-            {
-                CanBePermanent = canBePermanent,
-                Message = message,
-                HasChildren = hasChildren,
-                ChildrenCount = childrenCount
-            };
-        }
-
         public async Task<IEnumerable<SelectOptionDto>> GetParentOptionsAsync(SelectRequestDto? req = null)
         {
             req ??= new SelectRequestDto();
@@ -741,6 +610,187 @@ namespace shop_back.src.Shared.Infrastructure.Services
             }
             
             return false;
+        }
+        public async Task<BulkOperationResponse> BulkDeleteOptionsAsync(List<Guid> ids, bool permanent, string? currentUserId)
+        {
+            Guid? deletedBy = null;
+            if (!string.IsNullOrEmpty(currentUserId) && Guid.TryParse(currentUserId, out var parsed))
+                deletedBy = parsed;
+
+            var result = await _optionRepository.BulkDeleteOptionsAsync(ids, permanent, deletedBy);
+            
+            // Log the bulk operation
+            if (result.SuccessCount > 0)
+            {
+                await _userLogHelper.LogAsync(
+                    userId: deletedBy ?? Guid.Empty,
+                    actionType: "BulkDelete",
+                    detail: $"Bulk {(permanent ? "permanent" : "soft")} delete of {result.SuccessCount} option(s). Failed: {result.FailedCount}",
+                    changes: Newtonsoft.Json.JsonConvert.SerializeObject(new
+                    {
+                        ids = ids,
+                        permanent = permanent,
+                        successCount = result.SuccessCount,
+                        failedCount = result.FailedCount,
+                        errors = result.Errors
+                    }),
+                    modelName: "Option",
+                    modelId: "bulk"
+                );
+            }
+            
+            // Clear cache after bulk operation
+            await ClearOptionsCacheAsync();
+            
+            return result;
+        }
+
+        public async Task<BulkOperationResponse> BulkRestoreOptionsAsync(List<Guid> ids, string? currentUserId)
+        {
+            Guid? restoredBy = null;
+            if (!string.IsNullOrEmpty(currentUserId) && Guid.TryParse(currentUserId, out var parsed))
+                restoredBy = parsed;
+
+            var result = await _optionRepository.BulkRestoreOptionsAsync(ids, restoredBy);
+            
+            // Log the bulk operation
+            if (result.SuccessCount > 0)
+            {
+                await _userLogHelper.LogAsync(
+                    userId: restoredBy ?? Guid.Empty,
+                    actionType: "BulkRestore",
+                    detail: $"Bulk restore of {result.SuccessCount} option(s). Failed: {result.FailedCount}",
+                    changes: Newtonsoft.Json.JsonConvert.SerializeObject(new
+                    {
+                        ids = ids,
+                        successCount = result.SuccessCount,
+                        failedCount = result.FailedCount,
+                        errors = result.Errors
+                    }),
+                    modelName: "Option",
+                    modelId: "bulk"
+                );
+            }
+            
+            // Clear cache after bulk operation
+            await ClearOptionsCacheAsync();
+            
+            return result;
+        }
+        public async Task<(bool Success, string Message, string DeleteType)> DeleteOptionAsync(Guid id, bool permanent, string? currentUserId)
+        {
+            // Use the method that includes deleted records
+            var option = await _optionRepository.GetOptionByIdIncludingDeletedAsync(id);
+            if (option == null)
+                return (false, "Option not found", "none");
+            
+            Guid? deletedBy = null;
+            if (!string.IsNullOrEmpty(currentUserId) && Guid.TryParse(currentUserId, out var parsed))
+                deletedBy = parsed;
+            
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            
+            try
+            {
+                if (permanent)
+                {
+                    // Check if option has active (non-deleted) children
+                    var hasActiveChildren = await _context.Options
+                        .AnyAsync(o => o.ParentId == id && !o.IsDeleted);
+                    
+                    if (hasActiveChildren)
+                    {
+                        var childrenCount = await _context.Options
+                            .CountAsync(o => o.ParentId == id && !o.IsDeleted);
+                        await transaction.RollbackAsync();
+                        return (false, $"Cannot permanently delete option '{option.Name}' because it has {childrenCount} active child option(s). Please delete all child options first.", "none");
+                    }
+                    
+                    // If option is not already soft-deleted, soft delete it first
+                    if (!option.IsDeleted)
+                    {
+                        option.IsDeleted = true;
+                        option.DeletedAt = DateTime.UtcNow;
+                        option.DeletedBy = deletedBy;
+                        option.UpdatedAt = DateTime.UtcNow;
+                        option.UpdatedBy = deletedBy;
+                        await _context.SaveChangesAsync();
+                    }
+                    
+                    // Now permanently delete
+                    await _optionRepository.DeleteOptionAsync(id, true, deletedBy);
+                    await _optionRepository.SaveChangesAsync();
+                    
+                    await transaction.CommitAsync();
+                    
+                    // Clear cache
+                    await ClearOptionsCacheAsync();
+                    
+                    return (true, "Option permanently deleted successfully", "permanent");
+                }
+                else
+                {
+                    // Soft delete
+                    await _optionRepository.DeleteOptionAsync(id, false, deletedBy);
+                    await _optionRepository.SaveChangesAsync();
+                    
+                    await transaction.CommitAsync();
+                    
+                    // Clear cache
+                    await ClearOptionsCacheAsync();
+                    
+                    return (true, "Option moved to trash successfully", "soft");
+                }
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return (false, $"Error deleting option: {ex.Message}", "none");
+            }
+        }
+
+        public async Task<DeleteOptionInfoDto> CheckDeleteEligibilityAsync(Guid id)
+        {
+            var option = await _optionRepository.GetOptionByIdIncludingDeletedAsync(id);
+            if (option == null)
+                return new DeleteOptionInfoDto { 
+                    CanBePermanent = false, 
+                    Message = "Option not found", 
+                    HasChildren = false, 
+                    ChildrenCount = 0 
+                };
+            
+            if (option.IsDeleted)
+                return new DeleteOptionInfoDto { 
+                    CanBePermanent = true, 
+                    Message = "Option is in trash and can be permanently deleted", 
+                    HasChildren = false, 
+                    ChildrenCount = 0 
+                };
+            
+            var hasChildren = await _optionRepository.OptionHasChildrenAsync(id);
+            var childrenCount = await _optionRepository.GetChildrenCountAsync(id);
+            
+            // For non-deleted options: cannot permanently delete if has children
+            bool canBePermanent = !hasChildren;
+            string message;
+            
+            if (canBePermanent)
+            {
+                message = "Option has no children and can be permanently deleted";
+            }
+            else
+            {
+                message = $"Option has {childrenCount} child option(s) and cannot be permanently deleted. Please delete all child options first.";
+            }
+            
+            return new DeleteOptionInfoDto
+            {
+                CanBePermanent = canBePermanent,
+                Message = message,
+                HasChildren = hasChildren,
+                ChildrenCount = childrenCount
+            };
         }
     }
 }

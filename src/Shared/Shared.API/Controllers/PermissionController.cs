@@ -138,5 +138,62 @@ namespace shop_back.src.Shared.API.Controllers
                 hasRelatedRecords = result.HasRelatedRecords
             });
         }
+        [Authorize]
+        [HttpPost("bulk-delete")]
+        [HasPermissionAny("delete-admin-permissions")]
+        public async Task<IActionResult> BulkDelete([FromBody] BulkOperationRequest request)
+        {
+            // Validate and convert IDs
+            var (isValid, invalidIds) = request.ValidateIds();
+            
+            if (!isValid)
+            {
+                return BadRequest(new 
+                { 
+                    success = false, 
+                    message = $"Invalid GUID format for IDs: {string.Join(", ", invalidIds)}" 
+                });
+            }
+            
+            var guids = request.GetGuids();
+            var currentUserId = User?.FindFirst("UserId")?.Value 
+                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            
+            var result = await _service.BulkDeletePermissionsAsync(guids, request.Permanent, currentUserId);
+            
+            if (!result.Success)
+                return BadRequest(result);
+            
+            return Ok(result);
+        }
+
+        [Authorize]
+        [HttpPost("bulk-restore")]
+        [HasPermissionAny("restore-admin-permissions")]
+        public async Task<IActionResult> BulkRestore([FromBody] BulkOperationRequest request)
+        {
+            // Validate and convert IDs
+            var (isValid, invalidIds) = request.ValidateIds();
+            
+            if (!isValid)
+            {
+                return BadRequest(new 
+                { 
+                    success = false, 
+                    message = $"Invalid GUID format for IDs: {string.Join(", ", invalidIds)}" 
+                });
+            }
+            
+            var guids = request.GetGuids();
+            var currentUserId = User?.FindFirst("UserId")?.Value 
+                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            
+            var result = await _service.BulkRestorePermissionsAsync(guids, currentUserId);
+            
+            if (!result.Success)
+                return BadRequest(result);
+            
+            return Ok(result);
+        }
     }
 }

@@ -24,5 +24,7 @@ namespace shop_back.src.Shared.Application.Services
         
         // Get parent options for dropdown (only those with has_child = true)
         Task<IEnumerable<SelectOptionDto>> GetParentOptionsAsync(SelectRequestDto? req = null);
+        Task<BulkOperationResponse> BulkDeleteOptionsAsync(List<Guid> ids, bool permanent, string? currentUserId);
+        Task<BulkOperationResponse> BulkRestoreOptionsAsync(List<Guid> ids, string? currentUserId);
     }
 }

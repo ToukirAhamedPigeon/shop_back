@@ -5,6 +5,7 @@ using shop_back.src.Shared.Application.DTOs.Translations;
 using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Infrastructure.Services.Authorization;
 using System.Security.Claims;
+using shop_back.src.Shared.Application.DTOs.Common;
 
 namespace shop_back.src.Shared.API.Controllers
 {
@@ -158,6 +159,49 @@ namespace shop_back.src.Shared.API.Controllers
         {
             var modules = await _service.GetModulesForOptionsAsync();
             return Ok(modules);
+        }
+        /// <summary>
+        /// Bulk delete translations
+        /// </summary>
+        [Authorize]
+        [HttpPost("bulk-delete")]
+        [HasPermissionAny("delete-admin-translations")]
+        public async Task<IActionResult> BulkDelete([FromBody] BulkOperationRequest request)
+        {
+            // Convert string IDs to long for translations
+            var ids = new List<long>();
+            var invalidIds = new List<string>();
+            
+            foreach (var id in request.Ids)
+            {
+                if (long.TryParse(id, out var longId))
+                {
+                    ids.Add(longId);
+                }
+                else
+                {
+                    invalidIds.Add(id);
+                }
+            }
+            
+            if (invalidIds.Any())
+            {
+                return BadRequest(new 
+                { 
+                    success = false, 
+                    message = $"Invalid ID format for IDs: {string.Join(", ", invalidIds)}" 
+                });
+            }
+            
+            var currentUserId = User?.FindFirst("UserId")?.Value 
+                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            
+            var result = await _service.BulkDeleteTranslationsAsync(ids, currentUserId);
+            
+            if (!result.Success)
+                return BadRequest(result);
+            
+            return Ok(result);
         }
     }
 }

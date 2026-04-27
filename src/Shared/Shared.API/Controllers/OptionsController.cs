@@ -160,5 +160,68 @@ namespace shop_back.src.Shared.API.Controllers
             var options = await _service.GetParentOptionsAsync(req);
             return Ok(options);
         }
+        /// <summary>
+        /// Bulk delete options (soft or permanent)
+        /// </summary>
+        [Authorize]
+        [HttpPost("bulk-delete")]
+        [HasPermissionAny("delete-admin-options")]
+        public async Task<IActionResult> BulkDelete([FromBody] BulkOperationRequest request)
+        {
+            // Validate and convert IDs
+            var (isValid, invalidIds) = request.ValidateIds();
+            
+            if (!isValid)
+            {
+                return BadRequest(new 
+                { 
+                    success = false, 
+                    message = $"Invalid GUID format for IDs: {string.Join(", ", invalidIds)}" 
+                });
+            }
+            
+            var guids = request.GetGuids();
+            var currentUserId = User?.FindFirst("UserId")?.Value 
+                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            
+            var result = await _service.BulkDeleteOptionsAsync(guids, request.Permanent, currentUserId);
+            
+            if (!result.Success)
+                return BadRequest(result);
+            
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Bulk restore soft-deleted options
+        /// </summary>
+        [Authorize]
+        [HttpPost("bulk-restore")]
+        [HasPermissionAny("update-admin-options")]
+        public async Task<IActionResult> BulkRestore([FromBody] BulkOperationRequest request)
+        {
+            // Validate and convert IDs
+            var (isValid, invalidIds) = request.ValidateIds();
+            
+            if (!isValid)
+            {
+                return BadRequest(new 
+                { 
+                    success = false, 
+                    message = $"Invalid GUID format for IDs: {string.Join(", ", invalidIds)}" 
+                });
+            }
+            
+            var guids = request.GetGuids();
+            var currentUserId = User?.FindFirst("UserId")?.Value 
+                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            
+            var result = await _service.BulkRestoreOptionsAsync(guids, currentUserId);
+            
+            if (!result.Success)
+                return BadRequest(result);
+            
+            return Ok(result);
+        }
     }
 }

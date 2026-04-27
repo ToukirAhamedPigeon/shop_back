@@ -1,5 +1,6 @@
 using shop_back.src.Shared.Domain.Entities;
 using shop_back.src.Shared.Application.DTOs.Translations;
+using shop_back.src.Shared.Application.DTOs.Common;
 
 namespace shop_back.src.Shared.Application.Repositories
 {
@@ -18,5 +19,6 @@ namespace shop_back.src.Shared.Application.Repositories
         Task UpdateTranslationAsync(long id, UpdateTranslationRequest request, Guid? updatedBy, CancellationToken ct = default);  // Changed to Task
         Task DeleteTranslationAsync(long id, CancellationToken ct = default);
         Task<List<string>> GetDistinctModulesAsync(CancellationToken ct = default);
+        Task<BulkOperationResponse> BulkDeleteTranslationsAsync(List<long> ids, Guid? deletedBy, CancellationToken ct = default);
     }
 }

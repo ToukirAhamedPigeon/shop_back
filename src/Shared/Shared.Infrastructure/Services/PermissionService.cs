@@ -355,5 +355,67 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 HasRelatedRecords = false
             };
         }
+        // Add these methods at the end of the class:
+
+        public async Task<BulkOperationResponse> BulkDeletePermissionsAsync(List<Guid> ids, bool permanent, string? currentUserId)
+        {
+            Guid? deletedBy = null;
+            if (!string.IsNullOrEmpty(currentUserId) && Guid.TryParse(currentUserId, out var parsed))
+                deletedBy = parsed;
+
+            var result = await _repo.BulkDeletePermissionsAsync(ids, permanent, deletedBy);
+            
+            // Log the bulk operation
+            if (result.SuccessCount > 0)
+            {
+                await _userLogHelper.LogAsync(
+                    userId: deletedBy ?? Guid.Empty,
+                    actionType: "BulkDelete",
+                    detail: $"Bulk {(permanent ? "permanent" : "soft")} delete of {result.SuccessCount} permission(s). Failed: {result.FailedCount}",
+                    changes: JsonConvert.SerializeObject(new
+                    {
+                        ids = ids,
+                        permanent = permanent,
+                        successCount = result.SuccessCount,
+                        failedCount = result.FailedCount,
+                        errors = result.Errors
+                    }),
+                    modelName: "Permission",
+                    modelId: "bulk"
+                );
+            }
+            
+            return result;
+        }
+
+        public async Task<BulkOperationResponse> BulkRestorePermissionsAsync(List<Guid> ids, string? currentUserId)
+        {
+            Guid? restoredBy = null;
+            if (!string.IsNullOrEmpty(currentUserId) && Guid.TryParse(currentUserId, out var parsed))
+                restoredBy = parsed;
+
+            var result = await _repo.BulkRestorePermissionsAsync(ids, restoredBy);
+            
+            // Log the bulk operation
+            if (result.SuccessCount > 0)
+            {
+                await _userLogHelper.LogAsync(
+                    userId: restoredBy ?? Guid.Empty,
+                    actionType: "BulkRestore",
+                    detail: $"Bulk restore of {result.SuccessCount} permission(s). Failed: {result.FailedCount}",
+                    changes: JsonConvert.SerializeObject(new
+                    {
+                        ids = ids,
+                        successCount = result.SuccessCount,
+                        failedCount = result.FailedCount,
+                        errors = result.Errors
+                    }),
+                    modelName: "Permission",
+                    modelId: "bulk"
+                );
+            }
+            
+            return result;
+        }
     }
 }

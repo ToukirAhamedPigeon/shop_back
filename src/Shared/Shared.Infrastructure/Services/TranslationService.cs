@@ -299,5 +299,51 @@ namespace shop_back.src.Shared.Application.Services
             await _cache.KeyDeleteAsync(enCacheKey);
             await _cache.KeyDeleteAsync(bnCacheKey);
         }
+        public async Task<BulkOperationResponse> BulkDeleteTranslationsAsync(List<long> ids, string? deletedBy, CancellationToken ct = default)
+        {
+            Guid? deletedByGuid = null;
+            if (!string.IsNullOrEmpty(deletedBy) && Guid.TryParse(deletedBy, out var parsed))
+                deletedByGuid = parsed;
+
+            // Get modules for affected translations to clear cache
+            var affectedModules = new HashSet<string>();
+            foreach (var id in ids)
+            {
+                var translation = await _repo.GetTranslationByIdAsync(id, ct);
+                if (translation != null)
+                {
+                    affectedModules.Add(translation.Module);
+                }
+            }
+
+            var result = await _repo.BulkDeleteTranslationsAsync(ids, deletedByGuid, ct);
+            
+            // Log the bulk operation
+            if (result.SuccessCount > 0)
+            {
+                await _userLogHelper.LogAsync(
+                    userId: deletedByGuid ?? Guid.Empty,
+                    actionType: "BulkDelete",
+                    detail: $"Bulk delete of {result.SuccessCount} translation(s). Failed: {result.FailedCount}",
+                    changes: Newtonsoft.Json.JsonConvert.SerializeObject(new
+                    {
+                        ids = ids,
+                        successCount = result.SuccessCount,
+                        failedCount = result.FailedCount,
+                        errors = result.Errors
+                    }),
+                    modelName: "Translation",
+                    modelId: "bulk"
+                );
+            }
+            
+            // Clear cache for affected modules
+            foreach (var module in affectedModules)
+            {
+                await ClearCacheForTranslationAsync(module, ct);
+            }
+            
+            return result;
+        }
     }
 }

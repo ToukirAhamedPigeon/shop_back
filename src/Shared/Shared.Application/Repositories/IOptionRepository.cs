@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using shop_back.src.Shared.Domain.Entities;
 using shop_back.src.Shared.Application.DTOs.Options;
+using shop_back.src.Shared.Application.DTOs.Common;
 
 namespace shop_back.src.Shared.Application.Repositories
 {
@@ -21,5 +22,7 @@ namespace shop_back.src.Shared.Application.Repositories
         Task<int> GetChildrenCountAsync(Guid optionId);
         Task<IEnumerable<Option>> GetParentOptionsAsync(bool onlyWithChildren = true);
         Task SaveChangesAsync();
+        Task<BulkOperationResponse> BulkDeleteOptionsAsync(List<Guid> ids, bool permanent, Guid? deletedBy);
+        Task<BulkOperationResponse> BulkRestoreOptionsAsync(List<Guid> ids, Guid? restoredBy);
     }
 }

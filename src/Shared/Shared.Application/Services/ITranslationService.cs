@@ -16,5 +16,6 @@ namespace shop_back.src.Shared.Application.Services
         Task<(bool Success, string Message)> UpdateTranslationAsync(long id, UpdateTranslationRequest request, string? updatedBy, bool isDeveloper, CancellationToken ct = default);
         Task<(bool Success, string Message)> DeleteTranslationAsync(long id, string? deletedBy, CancellationToken ct = default);
         Task<List<SelectOptionDto>> GetModulesForOptionsAsync(CancellationToken ct = default);
+        Task<BulkOperationResponse> BulkDeleteTranslationsAsync(List<long> ids, string? deletedBy, CancellationToken ct = default);
     }
 }

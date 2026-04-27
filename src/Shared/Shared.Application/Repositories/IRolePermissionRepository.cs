@@ -50,5 +50,13 @@ namespace shop_back.src.Shared.Application.Repositories
         Task<string[]> GetRolesByPermissionNamesAsync(IEnumerable<string> permissionNames);
         
         Task SaveChangesAsync();
+
+        // Bulk operations for Roles
+        Task<BulkOperationResponse> BulkDeleteRolesAsync(List<Guid> ids, bool permanent, Guid? deletedBy);
+        Task<BulkOperationResponse> BulkRestoreRolesAsync(List<Guid> ids, Guid? restoredBy);
+
+        // Bulk operations for Permissions
+        Task<BulkOperationResponse> BulkDeletePermissionsAsync(List<Guid> ids, bool permanent, Guid? deletedBy);
+        Task<BulkOperationResponse> BulkRestorePermissionsAsync(List<Guid> ids, Guid? restoredBy);
     }
 }

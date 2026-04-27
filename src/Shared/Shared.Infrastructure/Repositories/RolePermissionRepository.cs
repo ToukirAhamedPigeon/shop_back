@@ -663,5 +663,319 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(p => p.Id == id);
         }
+
+        // Add these methods at the end of the class:
+
+        public async Task<BulkOperationResponse> BulkDeleteRolesAsync(List<Guid> ids, bool permanent, Guid? deletedBy)
+        {
+            var response = new BulkOperationResponse
+            {
+                TotalCount = ids.Count,
+                SuccessCount = 0,
+                FailedCount = 0,
+                Success = true
+            };
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                foreach (var id in ids)
+                {
+                    try
+                    {
+                        var role = await _context.Roles
+                            .IgnoreQueryFilters()
+                            .FirstOrDefaultAsync(r => r.Id == id);
+
+                        if (role == null)
+                        {
+                            response.FailedCount++;
+                            response.Errors.Add(new BulkOperationError
+                            {
+                                Id = id,
+                                Error = "Role not found"
+                            });
+                            response.Success = false;
+                            continue;
+                        }
+
+                        if (permanent)
+                        {
+                            // Delete all related records first
+                            var rolePermissions = await _context.RolePermissions
+                                .Where(rp => rp.RoleId == id)
+                                .ToListAsync();
+                            _context.RolePermissions.RemoveRange(rolePermissions);
+
+                            var modelRoles = await _context.ModelRoles
+                                .Where(mr => mr.RoleId == id)
+                                .ToListAsync();
+                            _context.ModelRoles.RemoveRange(modelRoles);
+
+                            // Delete the role
+                            _context.Roles.Remove(role);
+                        }
+                        else
+                        {
+                            // Soft delete
+                            role.IsDeleted = true;
+                            role.DeletedAt = DateTime.UtcNow;
+                            role.UpdatedAt = DateTime.UtcNow;
+                            role.UpdatedBy = deletedBy;
+                        }
+
+                        response.SuccessCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        response.FailedCount++;
+                        response.Errors.Add(new BulkOperationError
+                        {
+                            Id = id,
+                            Error = ex.Message
+                        });
+                        response.Success = false;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                response.Message = $"Processed {response.TotalCount} roles. Success: {response.SuccessCount}, Failed: {response.FailedCount}";
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                response.Success = false;
+                response.Message = $"Bulk operation failed: {ex.Message}";
+            }
+
+            return response;
+        }
+
+        public async Task<BulkOperationResponse> BulkRestoreRolesAsync(List<Guid> ids, Guid? restoredBy)
+        {
+            var response = new BulkOperationResponse
+            {
+                TotalCount = ids.Count,
+                SuccessCount = 0,
+                FailedCount = 0,
+                Success = true
+            };
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                foreach (var id in ids)
+                {
+                    try
+                    {
+                        var role = await _context.Roles
+                            .IgnoreQueryFilters()
+                            .FirstOrDefaultAsync(r => r.Id == id && r.IsDeleted);
+
+                        if (role == null)
+                        {
+                            response.FailedCount++;
+                            response.Errors.Add(new BulkOperationError
+                            {
+                                Id = id,
+                                Error = "Role not found or not deleted"
+                            });
+                            response.Success = false;
+                            continue;
+                        }
+
+                        role.IsDeleted = false;
+                        role.DeletedAt = null;
+                        role.UpdatedBy = restoredBy;
+                        role.UpdatedAt = DateTime.UtcNow;
+
+                        response.SuccessCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        response.FailedCount++;
+                        response.Errors.Add(new BulkOperationError
+                        {
+                            Id = id,
+                            Error = ex.Message
+                        });
+                        response.Success = false;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                response.Message = $"Processed {response.TotalCount} roles. Success: {response.SuccessCount}, Failed: {response.FailedCount}";
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                response.Success = false;
+                response.Message = $"Bulk restore failed: {ex.Message}";
+            }
+
+            return response;
+        }
+
+        public async Task<BulkOperationResponse> BulkDeletePermissionsAsync(List<Guid> ids, bool permanent, Guid? deletedBy)
+        {
+            var response = new BulkOperationResponse
+            {
+                TotalCount = ids.Count,
+                SuccessCount = 0,
+                FailedCount = 0,
+                Success = true
+            };
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                foreach (var id in ids)
+                {
+                    try
+                    {
+                        var permission = await _context.Permissions
+                            .IgnoreQueryFilters()
+                            .FirstOrDefaultAsync(p => p.Id == id);
+
+                        if (permission == null)
+                        {
+                            response.FailedCount++;
+                            response.Errors.Add(new BulkOperationError
+                            {
+                                Id = id,
+                                Error = "Permission not found"
+                            });
+                            response.Success = false;
+                            continue;
+                        }
+
+                        if (permanent)
+                        {
+                            // Delete all related records first
+                            var rolePermissions = await _context.RolePermissions
+                                .Where(rp => rp.PermissionId == id)
+                                .ToListAsync();
+                            _context.RolePermissions.RemoveRange(rolePermissions);
+
+                            var modelPermissions = await _context.ModelPermissions
+                                .Where(mp => mp.PermissionId == id)
+                                .ToListAsync();
+                            _context.ModelPermissions.RemoveRange(modelPermissions);
+
+                            // Delete the permission
+                            _context.Permissions.Remove(permission);
+                        }
+                        else
+                        {
+                            // Soft delete
+                            permission.IsDeleted = true;
+                            permission.DeletedAt = DateTime.UtcNow;
+                            permission.UpdatedAt = DateTime.UtcNow;
+                            permission.UpdatedBy = deletedBy;
+                        }
+
+                        response.SuccessCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        response.FailedCount++;
+                        response.Errors.Add(new BulkOperationError
+                        {
+                            Id = id,
+                            Error = ex.Message
+                        });
+                        response.Success = false;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                response.Message = $"Processed {response.TotalCount} permissions. Success: {response.SuccessCount}, Failed: {response.FailedCount}";
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                response.Success = false;
+                response.Message = $"Bulk operation failed: {ex.Message}";
+            }
+
+            return response;
+        }
+
+        public async Task<BulkOperationResponse> BulkRestorePermissionsAsync(List<Guid> ids, Guid? restoredBy)
+        {
+            var response = new BulkOperationResponse
+            {
+                TotalCount = ids.Count,
+                SuccessCount = 0,
+                FailedCount = 0,
+                Success = true
+            };
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                foreach (var id in ids)
+                {
+                    try
+                    {
+                        var permission = await _context.Permissions
+                            .IgnoreQueryFilters()
+                            .FirstOrDefaultAsync(p => p.Id == id && p.IsDeleted);
+
+                        if (permission == null)
+                        {
+                            response.FailedCount++;
+                            response.Errors.Add(new BulkOperationError
+                            {
+                                Id = id,
+                                Error = "Permission not found or not deleted"
+                            });
+                            response.Success = false;
+                            continue;
+                        }
+
+                        permission.IsDeleted = false;
+                        permission.DeletedAt = null;
+                        permission.UpdatedBy = restoredBy;
+                        permission.UpdatedAt = DateTime.UtcNow;
+
+                        response.SuccessCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        response.FailedCount++;
+                        response.Errors.Add(new BulkOperationError
+                        {
+                            Id = id,
+                            Error = ex.Message
+                        });
+                        response.Success = false;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                response.Message = $"Processed {response.TotalCount} permissions. Success: {response.SuccessCount}, Failed: {response.FailedCount}";
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                response.Success = false;
+                response.Message = $"Bulk restore failed: {ex.Message}";
+            }
+
+            return response;
+        }
     }
 }
