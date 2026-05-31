@@ -23,6 +23,8 @@ namespace shop_back.src.Shared.Infrastructure.Data
         public DbSet<TranslationKey> TranslationKeys { get; set; } = null!;
         public DbSet<TranslationValue> TranslationValues { get; set; } = null!;
         public DbSet<Mail> Mails { get; set; } = null!;
+        public DbSet<MailTemplate> MailTemplates { get; set; } = null!;
+        public DbSet<MailAttachment> MailAttachments { get; set; } = null!;
         public DbSet<MailVerification> MailVerifications { get; set; } = null!;
         public DbSet<Option> Options { get; set; } = null!;
 
@@ -108,6 +110,28 @@ namespace shop_back.src.Shared.Infrastructure.Data
                 .WithMany()
                 .HasForeignKey(m => m.CreatedBy)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // MailTemplate configuration
+            modelBuilder.Entity<MailTemplate>(entity =>
+            {
+                entity.ToTable("mail_templates");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.Subject).IsRequired().HasMaxLength(500);
+                entity.HasIndex(e => e.Name).IsUnique();
+            });
+
+            // MailAttachment configuration
+            modelBuilder.Entity<MailAttachment>(entity =>
+            {
+                entity.ToTable("mail_attachments");
+                entity.HasKey(e => e.Id);
+                entity.HasOne(e => e.Mail)
+                    .WithMany()
+                    .HasForeignKey(e => e.MailId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+    
 
             // ============================================
             // ModelRole configuration

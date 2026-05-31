@@ -1,4 +1,5 @@
 using shop_back.src.Shared.Application.Repositories;
+using shop_back.src.Shared.Application.DTOs.Mails; // Add this
 using shop_back.src.Shared.Domain.Entities;
 using System;
 using System.Threading.Tasks;
@@ -48,15 +49,20 @@ namespace shop_back.src.Shared.Application.Services
                 <p>This link will expire in {_tokenExpiryHours} hours.</p>
             ";
 
-            var mail = new Mail
+            var fullBody = _mailService.BuildEmailTemplate(emailBody, "Verify Your Email");
+
+            // Create SendMailRequest instead of Mail entity
+            var sendMailRequest = new SendMailRequest
             {
-                FromMail = "no-reply@yourdomain.com",
                 ToMail = user.Email,
                 Subject = "Email Verification",
-                Body = _mailService.BuildEmailTemplate(emailBody, "Verify Your Email")
+                Body = fullBody,
+                ModuleName = "Auth",
+                Purpose = "EmailVerification",
+                MailType = "auto"
             };
 
-            await _mailService.SendEmailAsync(mail);
+            await _mailService.SendEmailAsync(sendMailRequest, user.Id);
         }
 
         public async Task<(bool Success, string Message)> VerifyTokenAsync(string token)
@@ -108,6 +114,5 @@ namespace shop_back.src.Shared.Application.Services
 
             return (true, "Verification email sent successfully.");
         }
-
     }
 }

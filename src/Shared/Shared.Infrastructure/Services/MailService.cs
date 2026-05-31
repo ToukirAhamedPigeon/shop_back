@@ -1,134 +1,572 @@
-using System.Net;
-using System.Net.Mail;
-using shop_back.src.Shared.Application.Repositories;
+using MailKit;
+using MailKit.Security;
+using MailKit.Net.Imap;
+using MailKit.Net.Smtp;
+using MailKit.Search;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using MimeKit;
 using shop_back.src.Shared.Domain.Entities;
+using shop_back.src.Shared.Application.DTOs.Mails;
+using shop_back.src.Shared.Application.Repositories;
+using shop_back.src.Shared.Application.Services;
+using shop_back.src.Shared.Infrastructure.Helpers;
 using DotNetEnv;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 
-namespace shop_back.src.Shared.Application.Services
+// Create an alias for your IMailService to avoid ambiguity
+using IAppMailService = shop_back.src.Shared.Application.Services.IMailService;
+
+namespace shop_back.src.Shared.Infrastructure.Services
 {
-    public class MailService : IMailService
+    public class MailService : IAppMailService
     {
         private readonly IMailRepository _mailRepository;
-        private readonly IMailVerificationRepository _mailVerificationRepository;
+        private readonly IMailTemplateRepository _templateRepository;
+        private readonly IMailAttachmentRepository _attachmentRepository;
+        private readonly IUserRepository _userRepository;
+        private readonly IWebHostEnvironment _environment;
 
-        public MailService(IMailRepository mailRepository, IMailVerificationRepository mailVerificationRepository)
+        public MailService(
+            IMailRepository mailRepository,
+            IMailTemplateRepository templateRepository,
+            IMailAttachmentRepository attachmentRepository,
+            IUserRepository userRepository,
+            IWebHostEnvironment environment)
         {
             _mailRepository = mailRepository;
-            _mailVerificationRepository = mailVerificationRepository;
+            _templateRepository = templateRepository;
+            _attachmentRepository = attachmentRepository;
+            _userRepository = userRepository;
+            _environment = environment;
         }
 
-        public async Task SendEmailAsync(Mail mail)
+        private string GenerateMessageId()
         {
-            try
+            var domain = Env.GetString("SmtpHost", "localhost");
+            return $"<{Guid.NewGuid()}@{domain}>";
+        }
+
+        // Add helper method to get MIME type
+        private string GetMimeType(string fileName)
+        {
+            var extension = Path.GetExtension(fileName).ToLowerInvariant();
+            return extension switch
             {
-                // Save mail in DB
-                await _mailRepository.AddAsync(mail);
-                await _mailRepository.SaveChangesAsync();
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".webp" => "image/webp",
+                ".pdf" => "application/pdf",
+                ".doc" => "application/msword",
+                ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".xls" => "application/vnd.ms-excel",
+                ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ".ppt" => "application/vnd.ms-powerpoint",
+                ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                ".txt" => "text/plain",
+                ".csv" => "text/csv",
+                ".zip" => "application/zip",
+                ".rar" => "application/x-rar-compressed",
+                ".mp3" => "audio/mpeg",
+                ".mp4" => "video/mp4",
+                _ => "application/octet-stream"
+            };
+        }
 
-                // Load ENV
-                var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", ".env"));
-                try { DotNetEnv.Env.Load(envPath); } catch { }
+        private async Task SendSmtpEmailAsync(Mail mail, List<IFormFile>? attachments = null)
+        {
+            var smtpHost = Env.GetString("SmtpHost");
+            var smtpPort = Env.GetInt("SmtpPort");
+            var smtpUser = Env.GetString("SmtpUser");
+            var smtpPass = Env.GetString("SmtpPass");
 
-                var smtpHost = DotNetEnv.Env.GetString("SmtpHost")!;
-                var smtpPort = DotNetEnv.Env.GetInt("SmtpPort")!;
-                var smtpUser = DotNetEnv.Env.GetString("SmtpUser")!;
-                var smtpPass = DotNetEnv.Env.GetString("SmtpPass")!;
+            if (string.IsNullOrEmpty(smtpHost) || string.IsNullOrEmpty(smtpUser))
+            {
+                Console.WriteLine("SMTP not configured. Email saved to database only.");
+                return;
+            }
 
-                using var client = new SmtpClient(smtpHost, smtpPort)
+            using var client = new SmtpClient();
+            
+            if (smtpPort == 587)
+            {
+                await client.ConnectAsync(smtpHost, smtpPort, SecureSocketOptions.StartTls);
+            }
+            else if (smtpPort == 465)
+            {
+                await client.ConnectAsync(smtpHost, smtpPort, SecureSocketOptions.SslOnConnect);
+            }
+            else
+            {
+                await client.ConnectAsync(smtpHost, smtpPort, SecureSocketOptions.Auto);
+            }
+            
+            await client.AuthenticateAsync(smtpUser, smtpPass);
+
+            var message = new MimeMessage();
+            message.From.Add(MailboxAddress.Parse(mail.FromMail));
+            message.To.Add(MailboxAddress.Parse(mail.ToMail));
+            message.Subject = mail.Subject;
+            message.MessageId = mail.MessageId ?? GenerateMessageId();
+
+            if (!string.IsNullOrEmpty(mail.CcMail))
+            {
+                foreach (var cc in mail.CcMail.Split(',', StringSplitOptions.RemoveEmptyEntries))
                 {
-                    Credentials = new NetworkCredential(smtpUser, smtpPass),
-                    EnableSsl = true
-                };
+                    message.Cc.Add(MailboxAddress.Parse(cc.Trim()));
+                }
+            }
 
-                var message = new MailMessage(mail.FromMail, mail.ToMail)
+            if (!string.IsNullOrEmpty(mail.BccMail))
+            {
+                foreach (var bcc in mail.BccMail.Split(',', StringSplitOptions.RemoveEmptyEntries))
                 {
-                    Subject = mail.Subject,
-                    Body = mail.Body,
-                    IsBodyHtml = true
-                };
+                    message.Bcc.Add(MailboxAddress.Parse(bcc.Trim()));
+                }
+            }
 
-                // ---- ADD ATTACHMENTS ----
-                if (mail.Attachments != null)
+            var bodyBuilder = new BodyBuilder { HtmlBody = mail.Body };
+
+            // Add attachments from the uploaded files (original request)
+            if (attachments != null && attachments.Any())
+            {
+                foreach (var attachment in attachments)
                 {
-                    foreach (var filePath in mail.Attachments)
+                    if (attachment.Length > 0)
                     {
-                        // Console.WriteLine($"[ATTACHMENT CHECK] => {filePath} | Exists = {File.Exists(filePath)}");
-
-                        if (File.Exists(filePath))
+                        using var memoryStream = new MemoryStream();
+                        await attachment.CopyToAsync(memoryStream);
+                        memoryStream.Position = 0;
+                        bodyBuilder.Attachments.Add(attachment.FileName, memoryStream.ToArray());
+                    }
+                }
+            }
+            // Fallback: Add attachments from stored paths if no direct attachments
+            else if (mail.Attachments != null && mail.Attachments.Any())
+            {
+                foreach (var attachmentPath in mail.Attachments)
+                {
+                    if (!string.IsNullOrEmpty(attachmentPath))
+                    {
+                        // Handle remote URLs
+                        if (attachmentPath.StartsWith("http"))
                         {
-                            message.Attachments.Add(new Attachment(filePath));
+                            using var httpClient = new HttpClient();
+                            var fileBytes = await httpClient.GetByteArrayAsync(attachmentPath);
+                            var fileName = Path.GetFileName(new Uri(attachmentPath).LocalPath);
+                            // Remove timestamp prefix for display
+                            var parts = fileName.Split('_');
+                            if (parts.Length > 1 && long.TryParse(parts[0], out _))
+                            {
+                                fileName = string.Join("_", parts.Skip(1));
+                            }
+                            bodyBuilder.Attachments.Add(fileName, fileBytes);
                         }
-                        else
+                        // Handle local files
+                        else if (File.Exists(attachmentPath))
                         {
-                            Console.WriteLine($"[WARNING] Attachment not found: {filePath}");
+                            bodyBuilder.Attachments.Add(attachmentPath);
                         }
                     }
                 }
+            }
 
-                await client.SendMailAsync(message);
+            message.Body = bodyBuilder.ToMessageBody();
+
+            await client.SendAsync(message);
+            await client.DisconnectAsync(true);
+        }
+
+        public async Task<Mail> SendEmailAsync(SendMailRequest request, Guid? userId = null)
+        {
+            // Debug logging
+            Console.WriteLine($"=== MailService.SendEmailAsync ===");
+            Console.WriteLine($"To: {request.ToMail}");
+            Console.WriteLine($"Attachments in request: {request.Attachments?.Count ?? 0}");
+            
+            if (request.Attachments != null)
+            {
+                foreach (var file in request.Attachments)
+                {
+                    Console.WriteLine($"Processing: {file.FileName}, Size: {file.Length}, Type: {file.ContentType}");
+                }
+            }
+            
+            var fromEmail = Env.GetString("CompanyEmail") ?? Env.GetString("SmtpUser");
+
+            // Create mail record first (without attachments)
+            var mail = new Mail
+            {
+                FromMail = fromEmail ?? "system@localhost",
+                ToMail = request.ToMail,
+                CcMail = request.CcMail,
+                BccMail = request.BccMail,
+                Subject = request.Subject,
+                Body = request.Body,
+                ModuleName = request.ModuleName,
+                Purpose = request.Purpose,
+                Attachments = new List<string>(),
+                IsSent = true,
+                IsReceived = false,
+                IsRead = true,
+                MailType = request.MailType ?? "manual",
+                ParentMailId = request.ParentMailId,
+                SentAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                CreatedBy = userId,
+                MessageId = GenerateMessageId()
+            };
+
+            await _mailRepository.AddAsync(mail);
+            await _mailRepository.SaveChangesAsync();
+            Console.WriteLine($"Mail saved with ID: {mail.Id}");
+
+            // Copy attachments to memory BEFORE the background task
+            var attachmentMemoryStreams = new List<(string FileName, byte[] Content, string ContentType)>();
+            
+            if (request.Attachments != null && request.Attachments.Any())
+            {
+                foreach (var file in request.Attachments)
+                {
+                    if (file != null && file.Length > 0)
+                    {
+                        using var memoryStream = new MemoryStream();
+                        await file.CopyToAsync(memoryStream);
+                        attachmentMemoryStreams.Add((
+                            file.FileName, 
+                            memoryStream.ToArray(), 
+                            file.ContentType
+                        ));
+                    }
+                }
+            }
+
+            // Save attachments to storage (using the original files)
+            var attachmentPaths = new List<string>();
+            if (request.Attachments != null && request.Attachments.Any())
+            {
+                Console.WriteLine($"Processing {request.Attachments.Count} attachments...");
+                
+                foreach (var file in request.Attachments)
+                {
+                    if (file != null && file.Length > 0)
+                    {
+                        try
+                        {
+                            Console.WriteLine($"Saving attachment: {file.FileName}");
+                            
+                            // Save file to storage with processImage = false
+                            var savedPath = await FileHelper.SaveFileAsync(file, "mail_attachments", processImage: false, resizeOptions: null);
+                            Console.WriteLine($"Saved to: {savedPath}");
+                            
+                            if (!string.IsNullOrEmpty(savedPath))
+                            {
+                                attachmentPaths.Add(savedPath);
+                                
+                                var attachment = new MailAttachment
+                                {
+                                    MailId = mail.Id,
+                                    FileName = file.FileName,
+                                    FilePath = savedPath,
+                                    FileSize = file.Length,
+                                    MimeType = file.ContentType ?? GetMimeType(file.FileName),
+                                    CreatedAt = DateTime.UtcNow
+                                };
+                                await _attachmentRepository.AddAsync(attachment);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error saving attachment {file.FileName}: {ex.Message}");
+                        }
+                    }
+                }
+                
+                await _attachmentRepository.SaveChangesAsync();
+                
+                if (attachmentPaths.Any())
+                {
+                    mail.Attachments = attachmentPaths;
+                    await _mailRepository.UpdateAsync(mail);
+                    await _mailRepository.SaveChangesAsync();
+                    Console.WriteLine($"Updated mail with {attachmentPaths.Count} attachment paths");
+                }
+            }
+
+            // Send actual email via SMTP using the in-memory copies
+            _ = Task.Run(async () => {
+                try
+                {
+                    await SendSmtpEmailWithMemoryStreamsAsync(mail, attachmentMemoryStreams);
+                    Console.WriteLine("SMTP email sent successfully");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"SMTP send failed: {ex.Message}");
+                }
+            });
+
+            return mail;
+        }
+
+        public async Task<MailDetailDto?> GetMailByIdAsync(long id)
+        {
+            var mail = await _mailRepository.GetByIdWithRepliesAsync(id);
+            if (mail == null) return null;
+
+            // Mark as read if it's a received email
+            if (mail.IsReceived && !mail.IsRead)
+            {
+                await MarkAsReadAsync(id);
+                mail.IsRead = true;
+            }
+
+            return MapToDetailDto(mail);
+        }
+
+        public async Task<(IEnumerable<MailDto> Items, int TotalCount, int GrandTotalCount)> GetMailsAsync(MailFilterRequest request)
+        {
+            var (items, totalCount, grandTotalCount) = await _mailRepository.GetFilteredAsync(request);
+            var dtos = items.Select(MapToDto);
+            return (dtos, totalCount, grandTotalCount);
+        }
+
+        public async Task MarkAsReadAsync(long id)
+        {
+            var mail = await _mailRepository.GetByIdAsync(id);
+            if (mail != null && !mail.IsRead)
+            {
+                mail.IsRead = true;
+                mail.UpdatedAt = DateTime.UtcNow;
+                await _mailRepository.UpdateAsync(mail);
+                await _mailRepository.SaveChangesAsync();
+            }
+        }
+
+        public async Task MarkAsUnreadAsync(long id)
+        {
+            var mail = await _mailRepository.GetByIdAsync(id);
+            if (mail != null && mail.IsRead)
+            {
+                mail.IsRead = false;
+                mail.UpdatedAt = DateTime.UtcNow;
+                await _mailRepository.UpdateAsync(mail);
+                await _mailRepository.SaveChangesAsync();
+            }
+        }
+
+        public async Task ToggleStarAsync(long id)
+        {
+            var mail = await _mailRepository.GetByIdAsync(id);
+            if (mail != null)
+            {
+                mail.IsStarred = !mail.IsStarred;
+                mail.UpdatedAt = DateTime.UtcNow;
+                await _mailRepository.UpdateAsync(mail);
+                await _mailRepository.SaveChangesAsync();
+            }
+        }
+
+        public async Task MoveToTrashAsync(long id)
+        {
+            var mail = await _mailRepository.GetByIdAsync(id);
+            if (mail != null && !mail.IsTrash)
+            {
+                mail.IsTrash = true;
+                mail.UpdatedAt = DateTime.UtcNow;
+                await _mailRepository.UpdateAsync(mail);
+                await _mailRepository.SaveChangesAsync();
+            }
+        }
+
+        public async Task RestoreFromTrashAsync(long id)
+        {
+            var mail = await _mailRepository.GetByIdAsync(id);
+            if (mail != null && mail.IsTrash)
+            {
+                mail.IsTrash = false;
+                mail.UpdatedAt = DateTime.UtcNow;
+                await _mailRepository.UpdateAsync(mail);
+                await _mailRepository.SaveChangesAsync();
+            }
+        }
+
+        public async Task DeletePermanentlyAsync(long id)
+        {
+            // Delete attachments from storage first
+            var mail = await _mailRepository.GetByIdAsync(id);
+            if (mail != null && mail.Attachments.Any())
+            {
+                foreach (var attachmentPath in mail.Attachments)
+                {
+                    if (!string.IsNullOrEmpty(attachmentPath) && File.Exists(attachmentPath))
+                    {
+                        File.Delete(attachmentPath);
+                    }
+                }
+                await _attachmentRepository.DeleteByMailIdAsync(id);
+            }
+            
+            await _mailRepository.DeletePermanentlyAsync(id);
+            await _mailRepository.SaveChangesAsync();
+        }
+
+        public async Task<BulkOperationResponse> BulkActionAsync(BulkMailActionRequest request)
+        {
+            var response = new BulkOperationResponse
+            {
+                TotalCount = request.Ids.Count,
+                Success = true
+            };
+
+            try
+            {
+                switch (request.Action.ToLower())
+                {
+                    case "trash":
+                        await _mailRepository.BulkUpdateAsync(request.Ids, m => m.IsTrash = true);
+                        break;
+                    case "restore":
+                        await _mailRepository.BulkUpdateAsync(request.Ids, m => m.IsTrash = false);
+                        break;
+                    case "read":
+                        await _mailRepository.BulkUpdateAsync(request.Ids, m => m.IsRead = true);
+                        break;
+                    case "unread":
+                        await _mailRepository.BulkUpdateAsync(request.Ids, m => m.IsRead = false);
+                        break;
+                    case "star":
+                        await _mailRepository.BulkUpdateAsync(request.Ids, m => m.IsStarred = true);
+                        break;
+                    case "unstar":
+                        await _mailRepository.BulkUpdateAsync(request.Ids, m => m.IsStarred = false);
+                        break;
+                    case "delete":
+                        foreach (var id in request.Ids)
+                        {
+                            await DeletePermanentlyAsync(id);
+                        }
+                        break;
+                    default:
+                        throw new ArgumentException($"Unknown action: {request.Action}");
+                }
+
+                if (request.Action.ToLower() != "delete")
+                {
+                    await _mailRepository.SaveChangesAsync();
+                }
+                
+                response.SuccessCount = request.Ids.Count;
+                response.Message = $"{response.SuccessCount} mail(s) processed successfully";
             }
             catch (Exception ex)
             {
-                // Log the exception details
-                Console.WriteLine($"Error in SendEmailAsync: {ex.Message}");
-                throw new Exception("Error sending email.", ex);
-            }
-        }
-
-        public async Task<Mail?> GetMailByIdAsync(int id)
-        {
-            return await _mailRepository.GetByIdAsync(id);
-        }
-
-        public async Task<IEnumerable<Mail>> GetAllMailsAsync()
-        {
-            return await _mailRepository.GetAllAsync();
-        }
-
-        public async Task SendVerificationEmail(string toEmail, Guid userId, string? verificationToken = null)
-        {
-            // 🔹 Generate a token if not provided
-            if (string.IsNullOrEmpty(verificationToken))
-            {
-                verificationToken = Guid.NewGuid().ToString(); // simple GUID token
+                response.Success = false;
+                response.FailedCount = request.Ids.Count;
+                response.Message = ex.Message;
+                response.Errors.Add(new BulkOperationError { Id = 0, Error = ex.Message });
             }
 
-            // 🔹 Save token in DB or a temporary table for verification
-            var mailVerification = new MailVerification
+            return response;
+        }
+
+        public async Task<MailStatisticsDto> GetStatisticsAsync()
+        {
+            return await _mailRepository.GetStatisticsAsync();
+        }
+
+        // Template Management Methods
+        public async Task<MailTemplateDto> CreateTemplateAsync(MailTemplateRequest request, Guid userId)
+        {
+            if (await _templateRepository.ExistsByNameAsync(request.Name))
+                throw new InvalidOperationException($"Template with name '{request.Name}' already exists");
+
+            var template = new MailTemplate
             {
-                UserId = userId,
-                Token = verificationToken,
-                ExpiresAt = DateTime.UtcNow.AddHours(24), // valid for 24 hours
-                IsUsed = false
-            };
-            // Save token to DB (assume _mailVerificationRepository or a separate repo)
-            await _mailVerificationRepository.AddAsync(mailVerification);
-            await _mailVerificationRepository.SaveChangesAsync();
-
-            // 🔹 Build verification link
-            var envBaseUrl = Env.GetString("BASE_URL") ?? "http://localhost:5000";
-            var verifyLink = $"{envBaseUrl}/verify-email?token={verificationToken}";
-
-            // 🔹 Email body
-            var bodyContent = $@"
-                <p>Hi,</p>
-                <p>Thank you for registering. Please verify your email by clicking the button below:</p>
-                <a href='{verifyLink}' class='button'>Verify Email</a>
-                <p>If you did not request this, please ignore this email.</p>
-            ";
-
-            var htmlBody = BuildEmailTemplate(bodyContent, "Verify Your Email");
-
-            // 🔹 Send the email
-            var mail = new Mail
-            {
-                FromMail = Env.GetString("COMPANY_EMAIL") ?? "no-reply@company.com",
-                ToMail = toEmail,
-                Subject = "Verify Your Email",
-                Body = htmlBody
+                Name = request.Name,
+                Subject = request.Subject,
+                Body = request.Body,
+                Description = request.Description,
+                IsGlobal = request.IsGlobal,
+                CreatedBy = userId,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
             };
 
-            await SendEmailAsync(mail);
+            await _templateRepository.AddAsync(template);
+            await _templateRepository.SaveChangesAsync();
+
+            var result = await MapToTemplateDto(template);
+            return result ?? throw new InvalidOperationException("Failed to map template to DTO");
+        }
+
+        public async Task<MailTemplateDto> UpdateTemplateAsync(long id, MailTemplateRequest request, Guid userId)
+        {
+            var template = await _templateRepository.GetByIdAsync(id);
+            if (template == null)
+                throw new KeyNotFoundException("Template not found");
+
+            if (!template.IsGlobal && template.CreatedBy != userId)
+                throw new UnauthorizedAccessException("You don't have permission to edit this template");
+
+            if (await _templateRepository.ExistsByNameAsync(request.Name, id))
+                throw new InvalidOperationException($"Template with name '{request.Name}' already exists");
+
+            template.Name = request.Name;
+            template.Subject = request.Subject;
+            template.Body = request.Body;
+            template.Description = request.Description;
+            template.IsGlobal = request.IsGlobal;
+            template.UpdatedAt = DateTime.UtcNow;
+
+            await _templateRepository.UpdateAsync(template);
+            await _templateRepository.SaveChangesAsync();
+
+            var result = await MapToTemplateDto(template);
+            return result ?? throw new InvalidOperationException("Failed to map template to DTO");
+        }
+
+        public async Task DeleteTemplateAsync(long id, Guid userId)
+        {
+            var template = await _templateRepository.GetByIdAsync(id);
+            if (template == null)
+                throw new KeyNotFoundException("Template not found");
+
+            if (!template.IsGlobal && template.CreatedBy != userId)
+                throw new UnauthorizedAccessException("You don't have permission to delete this template");
+
+            await _templateRepository.DeleteAsync(template);
+            await _templateRepository.SaveChangesAsync();
+        }
+
+        public async Task<MailTemplateDto?> GetTemplateAsync(long id)
+        {
+            var template = await _templateRepository.GetByIdAsync(id);
+            if (template == null) return null;
+            return await MapToTemplateDto(template);
+        }
+
+        public async Task<(IEnumerable<MailTemplateDto> Items, int TotalCount)> GetTemplatesAsync(
+            string? q, int page, int limit, bool includeGlobal, Guid? userId)
+        {
+            var (items, totalCount) = await _templateRepository.GetFilteredAsync(q, page, limit, includeGlobal, userId);
+            var dtos = new List<MailTemplateDto>();
+            foreach (var item in items)
+            {
+                var dto = await MapToTemplateDto(item);
+                if (dto != null)
+                {
+                    dtos.Add(dto);
+                }
+            }
+            return (dtos, totalCount);
         }
 
         public string BuildEmailTemplate(string bodyContent, string subject = "Notification")
@@ -144,9 +582,9 @@ namespace shop_back.src.Shared.Application.Services
 
             // ================= HTML TEMPLATE =================
             var template = $@"
-                    <!DOCTYPE html>
-                    <html lang='en'>
-                    <head>
+                <!DOCTYPE html>
+                <html lang='en'>
+                <head>
                     <meta charset='UTF-8'>
                     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
                     <title>{subject}</title>
@@ -165,7 +603,7 @@ namespace shop_back.src.Shared.Application.Services
                             border-radius: 10px;
                             overflow: hidden;
                             box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-                            border-top: 6px solid #4f46e5; /* primary color */
+                            border-top: 6px solid #4f46e5;
                         }}
                         .header {{
                             background-color: #4f46e5;
@@ -207,25 +645,368 @@ namespace shop_back.src.Shared.Application.Services
                             text-decoration: none;
                         }}
                     </style>
-                    </head>
-                    <body>
+                </head>
+                <body>
                     <div class='container'>
                         <div class='header'>{companyName}</div>
-
                         <div class='body'>
                             {bodyContent}
                         </div>
-
                         <div class='footer'>
                             <p>{companyAddress}</p>
                             <p>Phone: {companyPhone} | Email: <a href='mailto:{companyEmail}'>{companyEmail}</a></p>
                             <p>Best Regards,<br/>{companyName} Team</p>
                         </div>
                     </div>
-                    </body>
-                    </html>";
+                </body>
+                </html>";
 
             return template;
+        }
+
+       // Email Fetching from IMAP - CORRECTED
+        public async Task FetchAndStoreEmailsAsync()
+        {
+            var imapHost = Env.GetString("ImapHost");
+            var imapPort = Env.GetInt("ImapPort");
+            var imapUser = Env.GetString("SmtpUser");
+            var imapPass = Env.GetString("SmtpPass");
+
+            if (string.IsNullOrEmpty(imapHost) || string.IsNullOrEmpty(imapUser))
+            {
+                Console.WriteLine("IMAP not configured. Cannot fetch emails.");
+                return;
+            }
+
+            Console.WriteLine($"Connecting to IMAP: {imapHost}:{imapPort}");
+            
+            using var client = new ImapClient();
+            
+            try
+            {
+                var cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(30)).Token;
+                await client.ConnectAsync(imapHost, imapPort, SecureSocketOptions.SslOnConnect, cancellationToken);
+                await client.AuthenticateAsync(imapUser, imapPass, cancellationToken);
+                
+                Console.WriteLine($"Authenticated as: {imapUser}");
+
+                var inbox = client.Inbox;
+                if (inbox == null)
+                {
+                    Console.WriteLine("Cannot access inbox. Inbox is null.");
+                    return;
+                }
+                
+                await inbox.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
+                Console.WriteLine($"Inbox opened. Total messages: {inbox.Count}");
+                Console.WriteLine($"Unread messages: {inbox.Unread}");
+
+                // Get only unread emails from last 7 days
+                var sevenDaysAgo = DateTime.UtcNow.AddDays(-7);
+                var query = SearchQuery.And(
+                    SearchQuery.Not(SearchQuery.Seen),
+                    SearchQuery.SentSince(sevenDaysAgo)
+                );
+                var uids = await inbox.SearchAsync(query, cancellationToken);
+                
+                Console.WriteLine($"Found {uids.Count} unread emails from last 7 days");
+
+                int newEmailsCount = 0;
+
+                foreach (var uid in uids)
+                {
+                    try
+                    {
+                        var message = await inbox.GetMessageAsync(uid, cancellationToken);
+                        
+                        // Check if already exists by MessageId
+                        var existing = await _mailRepository.GetFilteredAsync(new MailFilterRequest 
+                        { 
+                            Q = message.MessageId,
+                            Page = 1,
+                            Limit = 1
+                        });
+
+                        if (existing.TotalCount == 0)
+                        {
+                            Console.WriteLine($"Processing new email: {message.Subject} from {message.From}");
+                            
+                            // Save attachments using FileHelper (supports remote storage)
+                            var attachmentPaths = new List<string>();
+                            var mailAttachments = new List<MailAttachment>();
+                            
+                            foreach (var attachment in message.Attachments)
+                            {
+                                if (attachment is MimePart part && !string.IsNullOrEmpty(part.FileName))
+                                {
+                                    try
+                                    {
+                                        // Convert MimePart to IFormFile-like structure
+                                        using var memoryStream = new MemoryStream();
+                                        if (part.Content != null)
+                                        {
+                                            await part.Content.DecodeToAsync(memoryStream, cancellationToken);
+                                            memoryStream.Position = 0;
+                                        }
+                                        
+                                        // Create a temp file to use FileHelper
+                                        var tempPath = Path.GetTempFileName();
+                                        await File.WriteAllBytesAsync(tempPath, memoryStream.ToArray(), cancellationToken);
+                                        
+                                        // Use FileHelper to save to remote storage
+                                        var savedPath = await SaveAttachmentFromPathAsync(tempPath, part.FileName, part.ContentType?.MimeType ?? "application/octet-stream");
+                                        
+                                        // Clean up temp file
+                                        if (File.Exists(tempPath))
+                                            File.Delete(tempPath);
+                                        
+                                        if (!string.IsNullOrEmpty(savedPath))
+                                        {
+                                            attachmentPaths.Add(savedPath);
+                                            
+                                            mailAttachments.Add(new MailAttachment
+                                            {
+                                                FileName = part.FileName,
+                                                FilePath = savedPath,
+                                                FileSize = part.Content?.Stream?.Length,
+                                                MimeType = part.ContentType?.MimeType ?? "application/octet-stream",
+                                                CreatedAt = DateTime.UtcNow
+                                            });
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Console.WriteLine($"Error saving attachment {part.FileName}: {ex.Message}");
+                                    }
+                                }
+                            }
+
+                            var mail = new Mail
+                            {
+                                FromMail = message.From?.ToString() ?? "unknown",
+                                ToMail = string.Join(",", message.To),
+                                CcMail = message.Cc.Any() ? string.Join(",", message.Cc) : null,
+                                Subject = message.Subject ?? "No Subject",
+                                Body = message.HtmlBody ?? message.TextBody ?? "",
+                                Attachments = attachmentPaths,
+                                IsSent = false,
+                                IsReceived = true,
+                                IsRead = false,
+                                ReceivedAt = message.Date.DateTime,
+                                CreatedAt = message.Date.DateTime,
+                                UpdatedAt = DateTime.UtcNow,
+                                MessageId = message.MessageId,
+                                InReplyTo = message.InReplyTo
+                            };
+
+                            await _mailRepository.AddAsync(mail);
+                            await _mailRepository.SaveChangesAsync();
+                            
+                            // Save attachments with the mailId
+                            foreach (var attachment in mailAttachments)
+                            {
+                                attachment.MailId = mail.Id;
+                                await _attachmentRepository.AddAsync(attachment);
+                            }
+                            await _attachmentRepository.SaveChangesAsync();
+                            
+                            newEmailsCount++;
+                            Console.WriteLine($"Email #{newEmailsCount} saved with ID: {mail.Id}");
+                            
+                            // Mark as read on server after successful import (silent = true to prevent refresh)
+                            await inbox.AddFlagsAsync(uid, MessageFlags.Seen, true, cancellationToken);
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Email already exists: {message.MessageId}");
+                            // Mark as read on server even if exists
+                            await inbox.AddFlagsAsync(uid, MessageFlags.Seen, true, cancellationToken);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error processing email UID {uid}: {ex.Message}");
+                    }
+                }
+
+                Console.WriteLine($"Fetched {newEmailsCount} new emails");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"IMAP connection/authentication error: {ex.Message}");
+                throw;
+            }
+            finally
+            {
+                await client.DisconnectAsync(true);
+                Console.WriteLine("IMAP disconnected");
+            }
+        }
+
+        // Helper method to save attachment from file path
+        private async Task<string> SaveAttachmentFromPathAsync(string filePath, string fileName, string contentType)
+        {
+            // Create a fake IFormFile to use FileHelper
+            var fileContent = await File.ReadAllBytesAsync(filePath);
+            var stream = new MemoryStream(fileContent);
+            
+            var formFile = new FormFile(stream, 0, fileContent.Length, "file", fileName)
+            {
+                Headers = new HeaderDictionary(),
+                ContentType = contentType
+            };
+            
+            return await FileHelper.SaveFileAsync(formFile, "received_mails", processImage: false, resizeOptions: null);
+        }
+
+        // Mapping Methods
+        private MailDto MapToDto(Mail mail)
+        {
+            return new MailDto
+            {
+                Id = mail.Id,
+                FromMail = mail.FromMail,
+                ToMail = mail.ToMail,
+                CcMail = mail.CcMail,
+                BccMail = mail.BccMail,
+                Subject = mail.Subject,
+                Body = !string.IsNullOrEmpty(mail.Body) && mail.Body.Length > 500 ? mail.Body.Substring(0, 500) + "..." : (mail.Body ?? string.Empty),
+                ModuleName = mail.ModuleName,
+                Purpose = mail.Purpose,
+                IsSent = mail.IsSent,
+                IsReceived = mail.IsReceived,
+                IsRead = mail.IsRead,
+                IsStarred = mail.IsStarred,
+                IsTrash = mail.IsTrash,
+                SentAt = mail.SentAt,
+                ReceivedAt = mail.ReceivedAt,
+                MailType = mail.MailType,
+                ParentMailId = mail.ParentMailId,
+                CreatedByName = mail.CreatedByUser?.Name,
+                CreatedAt = mail.CreatedAt,
+                UpdatedAt = mail.UpdatedAt
+            };
+        }
+
+        private MailDetailDto MapToDetailDto(Mail mail)
+        {
+            return new MailDetailDto
+            {
+                Id = mail.Id,
+                FromMail = mail.FromMail,
+                ToMail = mail.ToMail,
+                CcMail = mail.CcMail,
+                BccMail = mail.BccMail,
+                Subject = mail.Subject,
+                Body = mail.Body,
+                ModuleName = mail.ModuleName,
+                Purpose = mail.Purpose,
+                Attachments = mail.Attachments,
+                IsSent = mail.IsSent,
+                IsReceived = mail.IsReceived,
+                IsRead = mail.IsRead,
+                IsStarred = mail.IsStarred,
+                IsTrash = mail.IsTrash,
+                SentAt = mail.SentAt,
+                ReceivedAt = mail.ReceivedAt,
+                MailType = mail.MailType,
+                ParentMailId = mail.ParentMailId,
+                CreatedByName = mail.CreatedByUser?.Name,
+                CreatedAt = mail.CreatedAt,
+                UpdatedAt = mail.UpdatedAt,
+                InReplyTo = mail.InReplyTo,
+                MessageId = mail.MessageId,
+                Replies = mail.Replies.Select(MapToDto).ToList()
+            };
+        }
+
+        private async Task<MailTemplateDto?> MapToTemplateDto(MailTemplate template)
+        {
+            User? createdByUser = null;
+            if (template.CreatedBy.HasValue && template.CreatedBy.Value != Guid.Empty)
+            {
+                createdByUser = await _userRepository.GetByIdAsync(template.CreatedBy.Value);
+            }
+            
+            var createdByName = createdByUser?.Name;
+
+            return new MailTemplateDto
+            {
+                Id = template.Id,
+                Name = template.Name,
+                Subject = template.Subject,
+                Body = template.Body,
+                Description = template.Description,
+                IsGlobal = template.IsGlobal,
+                CreatedByName = createdByName,
+                CreatedAt = template.CreatedAt
+            };
+        }
+
+        private async Task SendSmtpEmailWithMemoryStreamsAsync(Mail mail, List<(string FileName, byte[] Content, string ContentType)> attachments)
+        {
+            var smtpHost = Env.GetString("SmtpHost");
+            var smtpPort = Env.GetInt("SmtpPort");
+            var smtpUser = Env.GetString("SmtpUser");
+            var smtpPass = Env.GetString("SmtpPass");
+
+            if (string.IsNullOrEmpty(smtpHost) || string.IsNullOrEmpty(smtpUser))
+            {
+                Console.WriteLine("SMTP not configured. Email saved to database only.");
+                return;
+            }
+
+            using var client = new SmtpClient();
+            
+            if (smtpPort == 587)
+            {
+                await client.ConnectAsync(smtpHost, smtpPort, SecureSocketOptions.StartTls);
+            }
+            else if (smtpPort == 465)
+            {
+                await client.ConnectAsync(smtpHost, smtpPort, SecureSocketOptions.SslOnConnect);
+            }
+            else
+            {
+                await client.ConnectAsync(smtpHost, smtpPort, SecureSocketOptions.Auto);
+            }
+            
+            await client.AuthenticateAsync(smtpUser, smtpPass);
+
+            var message = new MimeMessage();
+            message.From.Add(MailboxAddress.Parse(mail.FromMail));
+            message.To.Add(MailboxAddress.Parse(mail.ToMail));
+            message.Subject = mail.Subject;
+            message.MessageId = mail.MessageId ?? GenerateMessageId();
+
+            if (!string.IsNullOrEmpty(mail.CcMail))
+            {
+                foreach (var cc in mail.CcMail.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    message.Cc.Add(MailboxAddress.Parse(cc.Trim()));
+                }
+            }
+
+            if (!string.IsNullOrEmpty(mail.BccMail))
+            {
+                foreach (var bcc in mail.BccMail.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    message.Bcc.Add(MailboxAddress.Parse(bcc.Trim()));
+                }
+            }
+
+            var bodyBuilder = new BodyBuilder { HtmlBody = mail.Body };
+
+            // Add attachments from in-memory copies
+            foreach (var attachment in attachments)
+            {
+                bodyBuilder.Attachments.Add(attachment.FileName, attachment.Content);
+            }
+
+            message.Body = bodyBuilder.ToMessageBody();
+
+            await client.SendAsync(message);
+            await client.DisconnectAsync(true);
         }
     }
 }

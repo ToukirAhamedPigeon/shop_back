@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.EntityFrameworkCore;
 using DotNetEnv;
@@ -21,6 +22,21 @@ var builder = WebApplication.CreateBuilder(args);
 // ------------------- LOAD .ENV -------------------
 var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"));
 try { Env.Load(envPath); } catch { }
+
+// ------------------- FILE UPLOAD SIZE LIMITS -------------------
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.ValueLengthLimit = int.MaxValue;
+    options.MultipartBodyLengthLimit = 100 * 1024 * 1024; // 100MB limit
+    options.MemoryBufferThreshold = int.MaxValue;
+});
+
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.Limits.MaxRequestBodySize = 200 * 1024 * 1024; // 200MB
+    // serverOptions.Limits.MaxRequestBufferSize = 200 * 1024 * 1024;
+    // serverOptions.Limits.MaxRequestHeaderSize = 200 * 1024 * 1024;
+});
 
 // ------------------- DATABASE -------------------
 var connStr = Env.GetString("DefaultConnection");
@@ -112,9 +128,11 @@ builder.Services.AddCors(p =>
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials();
+            .AllowCredentials()
+            .WithExposedHeaders("Content-Disposition");
     });
 });
+
 // কনফিগারেশন চেক করুন
 var fileStorageType = builder.Configuration["FILE_STORAGE_TYPE"];
 var remoteUrl = builder.Configuration["REMOTE_STORAGE_URL"];
@@ -125,12 +143,14 @@ Console.WriteLine($"REMOTE_STORAGE_URL from config: '{remoteUrl}'");
 // এনভায়রনমেন্ট ভেরিয়েবল থেকেও চেক করুন
 var envStorageType = Environment.GetEnvironmentVariable("FILE_STORAGE_TYPE");
 Console.WriteLine($"FILE_STORAGE_TYPE from env: '{envStorageType}'");
+
 var app = builder.Build();
 
 // ------------------- INITIALIZE FILE HELPER WITH REMOTE STORAGE -------------------
 // Get the service directly (now works because it's Singleton)
 var remoteFileHelper = app.Services.GetRequiredService<RemoteFileHelper>();
-FileHelper.Initialize(remoteFileHelper);
+var webHostEnvironment = app.Services.GetRequiredService<IWebHostEnvironment>();
+FileHelper.Initialize(remoteFileHelper, webHostEnvironment);
 
 #if !DEBUG
 app.UseHttpsRedirection();

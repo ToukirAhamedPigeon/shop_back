@@ -112,3 +112,4 @@ shop_back.http
 shop_back.sln
 Properties/
 dump.rdb
+wwwroot/

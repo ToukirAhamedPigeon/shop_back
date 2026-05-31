@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
@@ -7,6 +8,7 @@ namespace shop_back.src.Shared.Infrastructure.Helpers
     public static class FileHelper
     {
         private static RemoteFileHelper? _remoteHelper;
+        private static IWebHostEnvironment? _webHostEnvironment;
         
         public static ImageResizeOptions DefaultResizeOptions { get; set; } = new ImageResizeOptions
         {
@@ -20,60 +22,87 @@ namespace shop_back.src.Shared.Infrastructure.Helpers
         {
             _remoteHelper = remoteHelper;
         }
-
-        public static async Task<string?> SaveFileAsync(
-            IFormFile file, 
-            string subFolder = "users",
-            ImageResizeOptions? resizeOptions = null)
+        
+        public static void Initialize(RemoteFileHelper remoteHelper, IWebHostEnvironment webHostEnvironment)
         {
-            Console.WriteLine($"=== FileHelper.SaveFileAsync CALLED ===");
-            if (_remoteHelper != null)
-            {
-                Console.WriteLine("✅ Calling RemoteFileHelper.SaveFileAsync");
-                return await _remoteHelper.SaveFileAsync(file, subFolder, resizeOptions);
-            }
-            
-            Console.WriteLine("❌ _remoteHelper is NULL, using LOCAL");
-            return await SaveFileLocalAsync(file, subFolder, resizeOptions);
+            _remoteHelper = remoteHelper;
+            _webHostEnvironment = webHostEnvironment;
         }
 
-        public static async Task DeleteFileAsync(string? filePath)
-        {
-            if (_remoteHelper != null)
-            {
-                await _remoteHelper.DeleteFileAsync(filePath);
-            }
-            else
-            {
-                DeleteFileLocal(filePath);
-            }
-        }
-
-        public static async Task<string?> SaveFileLocalAsync(
-            IFormFile file, 
-            string subFolder = "users",
-            ImageResizeOptions? resizeOptions = null)
+        // Main SaveFileAsync method for mailbox attachments (accepts any file type)
+       public static async Task<string> SaveFileAsync(IFormFile file, string folder, bool processImage = true, ImageResizeOptions? resizeOptions = null)
         {
             if (file == null || file.Length == 0)
-                return null;
+                return string.Empty;
+            
+            // Use remote storage if configured
+            if (_remoteHelper != null && _remoteHelper.UseRemoteStorage)
+            {
+                var remotePath = await _remoteHelper.UploadFileAsync(file, folder, processImage, resizeOptions);
+                if (!string.IsNullOrEmpty(remotePath))
+                    return remotePath;
+            }
+            
+            // Otherwise save locally
+            return await SaveFileLocalAsync(file, folder, processImage, resizeOptions);
+        }
 
-            if (file.Length > 5 * 1024 * 1024)
-                throw new Exception("File size must be less than 5MB");
+        private static string SanitizeFileName(string fileName)
+        {
+            if (string.IsNullOrEmpty(fileName))
+                return Guid.NewGuid().ToString();
+            
+            // Get filename without path
+            fileName = Path.GetFileName(fileName);
+            
+            // Get extension
+            var extension = Path.GetExtension(fileName);
+            var nameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
+            
+            // Replace invalid characters with underscore
+            var invalidChars = Path.GetInvalidFileNameChars();
+            foreach (var c in invalidChars)
+            {
+                nameWithoutExt = nameWithoutExt.Replace(c, '_');
+            }
+            
+            // Replace spaces and special characters
+            nameWithoutExt = nameWithoutExt
+                .Replace(" ", "_")
+                .Replace("-", "_")
+                .Replace("__", "_");
+            
+            // Limit length to 100 characters
+            if (nameWithoutExt.Length > 100)
+                nameWithoutExt = nameWithoutExt.Substring(0, 100);
+            
+            // Add timestamp to ensure uniqueness
+            var timestamp = DateTime.UtcNow.Ticks;
+            
+            return $"{timestamp}_{nameWithoutExt}{extension}";
+        }
 
-            var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp", "image/jpg" };
-            if (!allowedTypes.Contains(file.ContentType))
-                throw new Exception("Only JPG, PNG, WEBP images are allowed");
-
-            var uploadPath = Path.Combine("wwwroot", "uploads", subFolder);
+        // Local file save with resizing support
+        public static async Task<string> SaveFileLocalAsync(IFormFile file, string folder, bool processImage = true, ImageResizeOptions? resizeOptions = null)
+        {
+            if (file == null || file.Length == 0)
+                return string.Empty;
+            
+            if (_webHostEnvironment == null)
+                throw new InvalidOperationException("FileHelper not initialized. Call Initialize() with IWebHostEnvironment first.");
+            
+            // Ensure directory exists
+            var uploadPath = Path.Combine(_webHostEnvironment.WebRootPath ?? "wwwroot", "uploads", folder);
             Directory.CreateDirectory(uploadPath);
-
-            var fileExtension = Path.GetExtension(file.FileName);
-            var fileName = $"{Guid.NewGuid()}{fileExtension}";
-            var fullPath = Path.Combine(uploadPath, fileName);
-
+            
+            // Use sanitized original filename
+            var fileName = SanitizeFileName(file.FileName);
+            var filePath = Path.Combine(uploadPath, fileName);
+            
+            // Check if it's an image and resize is requested
             var options = resizeOptions ?? DefaultResizeOptions;
             
-            if (options.Enabled && file.ContentType.StartsWith("image/"))
+            if (processImage && options.Enabled && file.ContentType.StartsWith("image/"))
             {
                 using var image = await Image.LoadAsync(file.OpenReadStream());
                 
@@ -92,46 +121,113 @@ namespace shop_back.src.Shared.Infrastructure.Helpers
                     image.Mutate(x => x.Resize(resizeWidth, resizeHeight));
                 }
                 
-                var outputExtension = Path.GetExtension(fileName).ToLower();
-                if (outputExtension == ".png")
+                var fileExtension = Path.GetExtension(fileName).ToLower();
+                if (fileExtension == ".png")
                 {
-                    await image.SaveAsPngAsync(fullPath);
+                    await image.SaveAsPngAsync(filePath);
                 }
-                else if (outputExtension == ".jpg" || outputExtension == ".jpeg")
+                else if (fileExtension == ".jpg" || fileExtension == ".jpeg")
                 {
-                    await image.SaveAsJpegAsync(fullPath);
+                    await image.SaveAsJpegAsync(filePath);
                 }
-                else if (outputExtension == ".webp")
+                else if (fileExtension == ".webp")
                 {
-                    await image.SaveAsWebpAsync(fullPath);
+                    await image.SaveAsWebpAsync(filePath);
                 }
                 else
                 {
-                    await image.SaveAsPngAsync(fullPath);
+                    await image.SaveAsPngAsync(filePath);
                 }
             }
             else
             {
-                using (var stream = new FileStream(fullPath, FileMode.Create))
+                using (var stream = new FileStream(filePath, FileMode.Create))
                 {
                     await file.CopyToAsync(stream);
                 }
             }
+            
+            return $"/uploads/{folder}/{fileName}";
+        }
 
-            return $"/uploads/{subFolder}/{fileName}";
+        public static Task<string> SaveFileFromPathAsync(string sourcePath, string folder)
+        {
+            if (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath))
+                return Task.FromResult(string.Empty);
+            
+            if (_webHostEnvironment == null)
+                throw new InvalidOperationException("FileHelper not initialized. Call Initialize() with IWebHostEnvironment first.");
+            
+            try
+            {
+                var uploadPath = Path.Combine(_webHostEnvironment.WebRootPath ?? "wwwroot", "uploads", folder);
+                Directory.CreateDirectory(uploadPath);
+                
+                var fileName = $"{Guid.NewGuid()}_{Path.GetFileName(sourcePath)}";
+                var destPath = Path.Combine(uploadPath, fileName);
+                
+                File.Copy(sourcePath, destPath);
+                
+                return Task.FromResult($"/uploads/{folder}/{fileName}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error copying file: {ex.Message}");
+                return Task.FromResult(string.Empty);
+            }
+        }
+
+        public static async Task DeleteFileAsync(string? filePath)
+        {
+            if (string.IsNullOrEmpty(filePath))
+                return;
+            
+            if (_remoteHelper != null && _remoteHelper.UseRemoteStorage)
+            {
+                await _remoteHelper.DeleteFileAsync(filePath);
+            }
+            else
+            {
+                DeleteFileLocal(filePath);
+            }
         }
 
         public static void DeleteFileLocal(string? filePath)
         {
             if (string.IsNullOrEmpty(filePath))
                 return;
-
-            var fullPath = Path.Combine("wwwroot", filePath.TrimStart('/'));
+            
+            if (_webHostEnvironment == null)
+                return;
+            
+            var fullPath = Path.Combine(_webHostEnvironment.WebRootPath ?? "wwwroot", filePath.TrimStart('/'));
             if (File.Exists(fullPath))
             {
                 File.Delete(fullPath);
                 Console.WriteLine($"Deleted local file: {fullPath}");
             }
+        }
+
+        // Legacy method for backward compatibility with profile image upload
+        // This method has the same name but different parameter order - uses "subFolder" instead of "folder"
+        public static async Task<string?> SaveFileForProfileAsync(
+            IFormFile file, 
+            string subFolder = "users",
+            ImageResizeOptions? resizeOptions = null)
+        {
+            if (file == null || file.Length == 0)
+                return null;
+
+            // Validate file for profile images
+            if (file.Length > 5 * 1024 * 1024)
+                throw new Exception("File size must be less than 5MB");
+
+            var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp", "image/jpg" };
+            if (!allowedTypes.Contains(file.ContentType))
+                throw new Exception("Only JPG, PNG, WEBP images are allowed");
+
+            var result = await SaveFileAsync(file, subFolder, true, resizeOptions);
+            return string.IsNullOrEmpty(result) ? null : result;
         }
     }
     

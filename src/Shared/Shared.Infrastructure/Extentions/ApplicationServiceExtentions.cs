@@ -1,5 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
-
+using Microsoft.Extensions.Hosting;
 using shop_back.src.Shared.Infrastructure.Services;
 using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Infrastructure.Helpers;
@@ -24,6 +24,16 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
             services.AddScoped<IUniqueCheckService, UniqueCheckService>();
             services.AddScoped<IRoleService, RoleService>();
             services.AddScoped<IPermissionService, PermissionService>();
+             // Register EmailFetchBackgroundService as Singleton
+            services.AddSingleton<EmailFetchBackgroundService>();
+            
+            // Register as IEmailFetchService (same instance)
+            services.AddSingleton<IEmailFetchService>(provider => 
+                provider.GetRequiredService<EmailFetchBackgroundService>());
+            
+            // Register as IHostedService to start background execution
+            services.AddSingleton<IHostedService>(provider => 
+                provider.GetRequiredService<EmailFetchBackgroundService>());
             services.AddScoped<UserLogHelper>();
             services.AddHttpContextAccessor();
 

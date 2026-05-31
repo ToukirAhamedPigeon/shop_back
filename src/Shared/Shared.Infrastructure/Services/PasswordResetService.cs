@@ -3,9 +3,10 @@ using BCrypt.Net;
 using shop_back.src.Shared.Application.Repositories;
 using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Application.DTOs.Auth;
+using shop_back.src.Shared.Application.DTOs.Mails; // Add this
 using shop_back.src.Shared.Domain.Entities;
 using DotNetEnv;
-using shop_back.src.Shared.Infrastructure.Helpers; 
+using shop_back.src.Shared.Infrastructure.Helpers;
 
 public class PasswordResetService : IPasswordResetService
 {
@@ -61,18 +62,21 @@ public class PasswordResetService : IPasswordResetService
                 </p>
                 <p>If you did not request this, ignore this email.</p>
             ";
+            
             var fullBody = _mailService.BuildEmailTemplate(bodyContent, "Reset your password");
 
-            await _mailService.SendEmailAsync(new Mail
+            // Create SendMailRequest instead of Mail entity
+            var sendMailRequest = new SendMailRequest
             {
-                FromMail = "noreply@shop.com",
                 ToMail = user.Email,
                 Subject = "Reset your password",
                 Body = fullBody,
                 ModuleName = "Auth",
                 Purpose = "PasswordReset",
-                CreatedBy = user.Id,
-            });
+                MailType = "auto"
+            };
+
+            await _mailService.SendEmailAsync(sendMailRequest, user.Id);
         }
         catch (Exception ex)
         {
@@ -99,7 +103,7 @@ public class PasswordResetService : IPasswordResetService
             throw new Exception("Invalid or expired token.");
 
         Console.WriteLine($"[USER ID CHECK] => {reset.UserId}");
-        var user = await _userRepo.GetByIdAsync(reset.UserId??Guid.Empty);
+        var user = await _userRepo.GetByIdAsync(reset.UserId ?? Guid.Empty);
         Console.WriteLine($"[USER CHECK] => {user?.Email} | Exists = {user != null}");
         if (user == null) throw new Exception("User not found.");
 

@@ -207,7 +207,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                             ResizeMode = ImageResizeMode.Max
                         };
                         
-                        user.ProfileImage = await FileHelper.SaveFileAsync(
+                        // Use SaveFileForProfileAsync for profile images (includes validation and resizing)
+                        user.ProfileImage = await FileHelper.SaveFileForProfileAsync(
                             request.ProfileImage, 
                             "users", 
                             resizeOptions
@@ -365,7 +366,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     ResizeMode = ImageResizeMode.Max
                 };
                 
-                user.ProfileImage = await FileHelper.SaveFileAsync(
+                // Use SaveFileForProfileAsync for profile images
+                user.ProfileImage = await FileHelper.SaveFileForProfileAsync(
                     request.ProfileImage, 
                     "users", 
                     resizeOptions
@@ -496,7 +498,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     ResizeMode = ImageResizeMode.Max
                 };
                 
-                user.ProfileImage = await FileHelper.SaveFileAsync(
+                // Use SaveFileForProfileAsync for profile images
+                user.ProfileImage = await FileHelper.SaveFileForProfileAsync(
                     request.ProfileImage, 
                     "users", 
                     resizeOptions
