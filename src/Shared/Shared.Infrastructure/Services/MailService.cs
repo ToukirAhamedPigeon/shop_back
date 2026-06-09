@@ -664,7 +664,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
             return template;
         }
 
-       // Email Fetching from IMAP - CORRECTED
+    
+        // Email Fetching from IMAP - FIXED for remote storage
         public async Task FetchAndStoreEmailsAsync()
         {
             var imapHost = Env.GetString("ImapHost");
@@ -741,7 +742,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                                 {
                                     try
                                     {
-                                        // Convert MimePart to IFormFile-like structure
+                                        // Convert MimePart to byte array
                                         using var memoryStream = new MemoryStream();
                                         if (part.Content != null)
                                         {
@@ -749,29 +750,46 @@ namespace shop_back.src.Shared.Infrastructure.Services
                                             memoryStream.Position = 0;
                                         }
                                         
-                                        // Create a temp file to use FileHelper
-                                        var tempPath = Path.GetTempFileName();
-                                        await File.WriteAllBytesAsync(tempPath, memoryStream.ToArray(), cancellationToken);
-                                        
-                                        // Use FileHelper to save to remote storage
-                                        var savedPath = await SaveAttachmentFromPathAsync(tempPath, part.FileName, part.ContentType?.MimeType ?? "application/octet-stream");
-                                        
-                                        // Clean up temp file
-                                        if (File.Exists(tempPath))
-                                            File.Delete(tempPath);
-                                        
-                                        if (!string.IsNullOrEmpty(savedPath))
+                                        var fileBytes = memoryStream.ToArray();
+                                        if (fileBytes.Length > 0)
                                         {
-                                            attachmentPaths.Add(savedPath);
+                                            // Create a fake IFormFile to use FileHelper
+                                            var fileName = part.FileName;
+                                            var contentType = part.ContentType?.MimeType ?? "application/octet-stream";
                                             
-                                            mailAttachments.Add(new MailAttachment
+                                            var formFile = new FormFile(
+                                                new MemoryStream(fileBytes), 
+                                                0, 
+                                                fileBytes.Length, 
+                                                "file", 
+                                                fileName)
                                             {
-                                                FileName = part.FileName,
-                                                FilePath = savedPath,
-                                                FileSize = part.Content?.Stream?.Length,
-                                                MimeType = part.ContentType?.MimeType ?? "application/octet-stream",
-                                                CreatedAt = DateTime.UtcNow
-                                            });
+                                                Headers = new HeaderDictionary(),
+                                                ContentType = contentType
+                                            };
+                                            
+                                            // Save to remote storage using FileHelper
+                                            // IMPORTANT: Use the returned path directly - don't generate your own!
+                                            var savedPath = await FileHelper.SaveFileAsync(formFile, "received_mails", processImage: false, resizeOptions: null);
+                                            
+                                            if (!string.IsNullOrEmpty(savedPath))
+                                            {
+                                                Console.WriteLine($"FileHelper returned path: {savedPath}");
+                                                attachmentPaths.Add(savedPath);
+                                                
+                                                mailAttachments.Add(new MailAttachment
+                                                {
+                                                    FileName = part.FileName,
+                                                    FilePath = savedPath,  // Use the exact path returned
+                                                    FileSize = fileBytes.Length,
+                                                    MimeType = contentType,
+                                                    CreatedAt = DateTime.UtcNow
+                                                });
+                                            }
+                                            else
+                                            {
+                                                Console.WriteLine($"WARNING: FileHelper returned null/empty for {part.FileName}");
+                                            }
                                         }
                                     }
                                     catch (Exception ex)
@@ -788,7 +806,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                                 CcMail = message.Cc.Any() ? string.Join(",", message.Cc) : null,
                                 Subject = message.Subject ?? "No Subject",
                                 Body = message.HtmlBody ?? message.TextBody ?? "",
-                                Attachments = attachmentPaths,
+                                Attachments = attachmentPaths,  // Use the paths returned by FileHelper
                                 IsSent = false,
                                 IsReceived = true,
                                 IsRead = false,
@@ -812,14 +830,14 @@ namespace shop_back.src.Shared.Infrastructure.Services
                             
                             newEmailsCount++;
                             Console.WriteLine($"Email #{newEmailsCount} saved with ID: {mail.Id}");
+                            Console.WriteLine($"Attachments saved: {string.Join(", ", attachmentPaths)}");
                             
-                            // Mark as read on server after successful import (silent = true to prevent refresh)
+                            // Mark as read on server after successful import
                             await inbox.AddFlagsAsync(uid, MessageFlags.Seen, true, cancellationToken);
                         }
                         else
                         {
                             Console.WriteLine($"Email already exists: {message.MessageId}");
-                            // Mark as read on server even if exists
                             await inbox.AddFlagsAsync(uid, MessageFlags.Seen, true, cancellationToken);
                         }
                     }

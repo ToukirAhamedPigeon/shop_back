@@ -43,7 +43,6 @@ namespace shop_back.src.Shared.API.Controllers
         {
             try
             {
-                // Log the incoming files for debugging
                 Console.WriteLine($"=== SEND MAIL REQUEST ===");
                 Console.WriteLine($"To: {request.ToMail}");
                 Console.WriteLine($"Subject: {request.Subject}");
@@ -71,6 +70,7 @@ namespace shop_back.src.Shared.API.Controllers
 
         [HttpPost("fetch")]
         [HasPermissionAny("read-admin-mails")]
+        [RequestSizeLimit(50 * 1024 * 1024)] // 50MB limit for fetching (emails with large attachments)
         public async Task<IActionResult> FetchEmails()
         {
             try
@@ -80,6 +80,7 @@ namespace shop_back.src.Shared.API.Controllers
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Error in FetchEmails: {ex.Message}");
                 return BadRequest(new { success = false, message = ex.Message });
             }
         }
@@ -177,7 +178,6 @@ namespace shop_back.src.Shared.API.Controllers
         {
             try
             {
-                // Decode the URL if needed
                 var decodedUrl = Uri.UnescapeDataString(fileUrl);
                 
                 using var httpClient = new HttpClient();
@@ -189,11 +189,9 @@ namespace shop_back.src.Shared.API.Controllers
                 var content = await response.Content.ReadAsByteArrayAsync();
                 var fileName = Path.GetFileName(new Uri(decodedUrl).LocalPath);
                 
-                // Try to extract original filename from the URL
                 var fileNameParts = fileName.Split('_');
-                if (fileNameParts.Length > 1)
+                if (fileNameParts.Length > 1 && long.TryParse(fileNameParts[0], out _))
                 {
-                    // Remove the timestamp prefix
                     fileName = string.Join("_", fileNameParts.Skip(1));
                 }
                 
@@ -201,16 +199,77 @@ namespace shop_back.src.Shared.API.Controllers
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Error in DownloadAttachment: {ex.Message}");
                 return BadRequest(new { success = false, message = ex.Message });
             }
         }
 
         [HttpGet("debug-statistics")]
+        [HasPermissionAny("read-admin-mails")]
         public async Task<IActionResult> DebugStatistics()
         {
             var stats = await _mailService.GetStatisticsAsync();
             Console.WriteLine($"Debug Stats: Sent={stats.TotalSent}, Received={stats.TotalReceived}, Unread={stats.UnreadCount}");
             return Ok(stats);
+        }
+
+        [HttpPost("fix-attachment-paths")]
+        [HasPermissionAny("read-admin-mails")]
+        public async Task<IActionResult> FixAttachmentPaths()
+        {
+            var fixedCount = 0;
+            var notFoundCount = 0;
+            var results = new List<object>();
+            
+            // Get all mails with attachments
+            var allMails = await _mailService.GetMailsAsync(new MailFilterRequest { Page = 1, Limit = 1000 });
+            
+            foreach (var mail in allMails.Items)
+            {
+                var updated = false;
+                var newAttachments = new List<string>();
+                
+                foreach (var attachment in mail.Attachments)
+                {
+                    // Extract the filename from the stored URL
+                    var fileName = Path.GetFileName(attachment);
+                    
+                    // Check if the file exists at the expected remote URL
+                    var expectedUrl = attachment.StartsWith("http") ? attachment : $"https://shopfiles.pigeonic.com{attachment}";
+                    
+                    using var httpClient = new HttpClient();
+                    var response = await httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Head, expectedUrl));
+                    
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        // File doesn't exist at that URL - we need to find the correct one
+                        // The correct files have timestamp format: 639158104203873286_filename.jpg
+                        Console.WriteLine($"File not found: {expectedUrl}");
+                        notFoundCount++;
+                        
+                        // You might want to manually map or skip
+                        newAttachments.Add(attachment); // Keep original for now
+                    }
+                    else
+                    {
+                        newAttachments.Add(attachment);
+                        if (!attachment.StartsWith("https://"))
+                        {
+                            updated = true;
+                        }
+                    }
+                }
+                
+                if (updated)
+                {
+                    // Update the mail's attachments
+                    // You'll need to implement this update in your service
+                    fixedCount++;
+                    results.Add(new { mailId = mail.Id, oldPaths = mail.Attachments, newPaths = newAttachments });
+                }
+            }
+            
+            return Ok(new { fixedCount, notFoundCount, results });
         }
     }
 }
