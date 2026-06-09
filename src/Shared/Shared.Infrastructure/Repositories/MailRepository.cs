@@ -170,6 +170,14 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             };
         }
 
+        public async Task<bool> ExistsByMessageIdAsync(string messageId)
+        {
+            if (string.IsNullOrEmpty(messageId))
+                return false;
+            
+            return await _context.Mails.AnyAsync(m => m.MessageId == messageId);
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

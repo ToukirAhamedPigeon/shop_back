@@ -12,7 +12,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<EmailFetchBackgroundService> _logger;
-        private readonly TimeSpan _interval = TimeSpan.FromMinutes(5);
+        private readonly TimeSpan _interval = TimeSpan.FromMinutes(2);
         
         private EmailFetchServiceStatus _status;
         private readonly SemaphoreSlim _fetchLock = new SemaphoreSlim(1, 1);

@@ -665,7 +665,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
         }
 
     
-        // Email Fetching from IMAP - FIXED for remote storage
+       // Email Fetching from IMAP - FULL UPDATED VERSION
         public async Task FetchAndStoreEmailsAsync()
         {
             var imapHost = Env.GetString("ImapHost");
@@ -698,8 +698,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     return;
                 }
                 
-                await inbox.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
-                Console.WriteLine($"Inbox opened. Total messages: {inbox.Count}");
+                await inbox.OpenAsync(FolderAccess.ReadWrite, cancellationToken);
+                Console.WriteLine($"Inbox opened in ReadWrite mode. Total messages: {inbox.Count}");
                 Console.WriteLine($"Unread messages: {inbox.Unread}");
 
                 // Get only unread emails from last 7 days
@@ -719,139 +719,141 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     try
                     {
                         var message = await inbox.GetMessageAsync(uid, cancellationToken);
+                        var messageId = message.MessageId;
                         
-                        // Check if already exists by MessageId
-                        var existing = await _mailRepository.GetFilteredAsync(new MailFilterRequest 
-                        { 
-                            Q = message.MessageId,
-                            Page = 1,
-                            Limit = 1
-                        });
-
-                        if (existing.TotalCount == 0)
+                        Console.WriteLine($"Checking email: {message.Subject} (MessageId: {messageId})");
+                        
+                        // PROPER DUPLICATE CHECK using dedicated method
+                        bool exists = !string.IsNullOrEmpty(messageId) && await _mailRepository.ExistsByMessageIdAsync(messageId);
+                        
+                        if (exists)
                         {
-                            Console.WriteLine($"Processing new email: {message.Subject} from {message.From}");
-                            
-                            // Save attachments using FileHelper (supports remote storage)
-                            var attachmentPaths = new List<string>();
-                            var mailAttachments = new List<MailAttachment>();
-                            
-                            foreach (var attachment in message.Attachments)
+                            Console.WriteLine($"⚠️ Email already exists in database: {messageId}");
+                            // Mark as read on server since it's already processed
+                            await inbox.AddFlagsAsync(uid, MessageFlags.Seen, true, cancellationToken);
+                            continue; // Skip this email completely
+                        }
+
+                        Console.WriteLine($"✅ Processing new email: {message.Subject} from {message.From}");
+                        
+                        // Save attachments using FileHelper
+                        var attachmentPaths = new List<string>();
+                        var mailAttachments = new List<MailAttachment>();
+                        
+                        foreach (var attachment in message.Attachments)
+                        {
+                            if (attachment is MimePart part && !string.IsNullOrEmpty(part.FileName))
                             {
-                                if (attachment is MimePart part && !string.IsNullOrEmpty(part.FileName))
+                                try
                                 {
-                                    try
+                                    using var memoryStream = new MemoryStream();
+                                    if (part.Content != null)
                                     {
-                                        // Convert MimePart to byte array
-                                        using var memoryStream = new MemoryStream();
-                                        if (part.Content != null)
-                                        {
-                                            await part.Content.DecodeToAsync(memoryStream, cancellationToken);
-                                            memoryStream.Position = 0;
-                                        }
-                                        
-                                        var fileBytes = memoryStream.ToArray();
-                                        if (fileBytes.Length > 0)
-                                        {
-                                            // Create a fake IFormFile to use FileHelper
-                                            var fileName = part.FileName;
-                                            var contentType = part.ContentType?.MimeType ?? "application/octet-stream";
-                                            
-                                            var formFile = new FormFile(
-                                                new MemoryStream(fileBytes), 
-                                                0, 
-                                                fileBytes.Length, 
-                                                "file", 
-                                                fileName)
-                                            {
-                                                Headers = new HeaderDictionary(),
-                                                ContentType = contentType
-                                            };
-                                            
-                                            // Save to remote storage using FileHelper
-                                            // IMPORTANT: Use the returned path directly - don't generate your own!
-                                            var savedPath = await FileHelper.SaveFileAsync(formFile, "received_mails", processImage: false, resizeOptions: null);
-                                            
-                                            if (!string.IsNullOrEmpty(savedPath))
-                                            {
-                                                Console.WriteLine($"FileHelper returned path: {savedPath}");
-                                                attachmentPaths.Add(savedPath);
-                                                
-                                                mailAttachments.Add(new MailAttachment
-                                                {
-                                                    FileName = part.FileName,
-                                                    FilePath = savedPath,  // Use the exact path returned
-                                                    FileSize = fileBytes.Length,
-                                                    MimeType = contentType,
-                                                    CreatedAt = DateTime.UtcNow
-                                                });
-                                            }
-                                            else
-                                            {
-                                                Console.WriteLine($"WARNING: FileHelper returned null/empty for {part.FileName}");
-                                            }
-                                        }
+                                        await part.Content.DecodeToAsync(memoryStream, cancellationToken);
+                                        memoryStream.Position = 0;
                                     }
-                                    catch (Exception ex)
+                                    
+                                    var fileBytes = memoryStream.ToArray();
+                                    if (fileBytes.Length > 0)
                                     {
-                                        Console.WriteLine($"Error saving attachment {part.FileName}: {ex.Message}");
+                                        var fileName = part.FileName;
+                                        var contentType = part.ContentType?.MimeType ?? "application/octet-stream";
+                                        
+                                        var formFile = new FormFile(
+                                            new MemoryStream(fileBytes), 
+                                            0, 
+                                            fileBytes.Length, 
+                                            "file", 
+                                            fileName)
+                                        {
+                                            Headers = new HeaderDictionary(),
+                                            ContentType = contentType
+                                        };
+                                        
+                                        var savedPath = await FileHelper.SaveFileAsync(formFile, "received_mails", processImage: false, resizeOptions: null);
+                                        
+                                        if (!string.IsNullOrEmpty(savedPath))
+                                        {
+                                            Console.WriteLine($"📎 Saved attachment: {savedPath}");
+                                            attachmentPaths.Add(savedPath);
+                                            
+                                            mailAttachments.Add(new MailAttachment
+                                            {
+                                                FileName = part.FileName,
+                                                FilePath = savedPath,
+                                                FileSize = fileBytes.Length,
+                                                MimeType = contentType,
+                                                CreatedAt = DateTime.UtcNow
+                                            });
+                                        }
                                     }
                                 }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Error saving attachment {part.FileName}: {ex.Message}");
+                                }
                             }
+                        }
 
-                            var mail = new Mail
-                            {
-                                FromMail = message.From?.ToString() ?? "unknown",
-                                ToMail = string.Join(",", message.To),
-                                CcMail = message.Cc.Any() ? string.Join(",", message.Cc) : null,
-                                Subject = message.Subject ?? "No Subject",
-                                Body = message.HtmlBody ?? message.TextBody ?? "",
-                                Attachments = attachmentPaths,  // Use the paths returned by FileHelper
-                                IsSent = false,
-                                IsReceived = true,
-                                IsRead = false,
-                                ReceivedAt = message.Date.DateTime,
-                                CreatedAt = message.Date.DateTime,
-                                UpdatedAt = DateTime.UtcNow,
-                                MessageId = message.MessageId,
-                                InReplyTo = message.InReplyTo
-                            };
+                        var mail = new Mail
+                        {
+                            FromMail = message.From?.ToString() ?? "unknown",
+                            ToMail = string.Join(",", message.To),
+                            CcMail = message.Cc.Any() ? string.Join(",", message.Cc) : null,
+                            Subject = message.Subject ?? "No Subject",
+                            Body = message.HtmlBody ?? message.TextBody ?? "",
+                            Attachments = attachmentPaths,
+                            IsSent = false,
+                            IsReceived = true,
+                            IsRead = false,
+                            ReceivedAt = message.Date.DateTime,
+                            CreatedAt = message.Date.DateTime,
+                            UpdatedAt = DateTime.UtcNow,
+                            MessageId = messageId,
+                            InReplyTo = message.InReplyTo
+                        };
 
-                            await _mailRepository.AddAsync(mail);
-                            await _mailRepository.SaveChangesAsync();
-                            
-                            // Save attachments with the mailId
-                            foreach (var attachment in mailAttachments)
-                            {
-                                attachment.MailId = mail.Id;
-                                await _attachmentRepository.AddAsync(attachment);
-                            }
-                            await _attachmentRepository.SaveChangesAsync();
-                            
-                            newEmailsCount++;
-                            Console.WriteLine($"Email #{newEmailsCount} saved with ID: {mail.Id}");
-                            Console.WriteLine($"Attachments saved: {string.Join(", ", attachmentPaths)}");
-                            
-                            // Mark as read on server after successful import
+                        await _mailRepository.AddAsync(mail);
+                        await _mailRepository.SaveChangesAsync();
+                        
+                        foreach (var attachment in mailAttachments)
+                        {
+                            attachment.MailId = mail.Id;
+                            await _attachmentRepository.AddAsync(attachment);
+                        }
+                        await _attachmentRepository.SaveChangesAsync();
+                        
+                        newEmailsCount++;
+                        Console.WriteLine($"✅ Email #{newEmailsCount} saved with ID: {mail.Id}");
+                        
+                        // Mark as read on server after successful save
+                        await inbox.AddFlagsAsync(uid, MessageFlags.Seen, true, cancellationToken);
+                        Console.WriteLine($"📧 Marked email as read on server");
+                    }
+                    catch (DbUpdateException dbEx)
+                    {
+                        if (dbEx.InnerException?.Message?.Contains("duplicate key") == true ||
+                            dbEx.Message?.Contains("23505") == true)
+                        {
+                            Console.WriteLine($"⚠️ Duplicate email detected (race condition), marking as read...");
                             await inbox.AddFlagsAsync(uid, MessageFlags.Seen, true, cancellationToken);
                         }
                         else
                         {
-                            Console.WriteLine($"Email already exists: {message.MessageId}");
-                            await inbox.AddFlagsAsync(uid, MessageFlags.Seen, true, cancellationToken);
+                            Console.WriteLine($"❌ Database error processing email UID {uid}: {dbEx.Message}");
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error processing email UID {uid}: {ex.Message}");
+                        Console.WriteLine($"❌ Error processing email UID {uid}: {ex.Message}");
                     }
                 }
 
-                Console.WriteLine($"Fetched {newEmailsCount} new emails");
+                Console.WriteLine($"📊 Fetched {newEmailsCount} new emails");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"IMAP connection/authentication error: {ex.Message}");
+                Console.WriteLine($"❌ IMAP connection/authentication error: {ex.Message}");
                 throw;
             }
             finally

@@ -17,6 +17,7 @@ namespace shop_back.src.Shared.Application.Repositories
         Task<int> GetUnreadCountAsync();
         Task<MailStatisticsDto> GetStatisticsAsync();
         Task SaveChangesAsync();
+        Task<bool> ExistsByMessageIdAsync(string messageId);
     }
 
     public interface IMailTemplateRepository
@@ -35,6 +36,7 @@ namespace shop_back.src.Shared.Application.Repositories
         Task AddAsync(MailAttachment attachment);
         Task<List<MailAttachment>> GetByMailIdAsync(long mailId);
         Task DeleteByMailIdAsync(long mailId);
+
         Task SaveChangesAsync();
     }
 }
