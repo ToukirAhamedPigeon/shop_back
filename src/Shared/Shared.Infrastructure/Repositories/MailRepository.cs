@@ -21,7 +21,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
         {
             return await _context.Mails
                 .Include(m => m.CreatedByUser)
-                .FirstOrDefaultAsync(m => m.Id == id && !m.IsTrash);
+                .FirstOrDefaultAsync(m => m.Id == id);
         }
 
         public async Task<Mail?> GetByIdWithRepliesAsync(long id)
@@ -30,7 +30,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 .Include(m => m.CreatedByUser)
                 .Include(m => m.Replies)
                 .ThenInclude(r => r.CreatedByUser)
-                .FirstOrDefaultAsync(m => m.Id == id && !m.IsTrash);
+                .FirstOrDefaultAsync(m => m.Id == id);
         }
 
         public async Task<(IEnumerable<Mail> Items, int TotalCount, int GrandTotalCount)> GetFilteredAsync(MailFilterRequest request)
@@ -39,7 +39,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 .Include(m => m.CreatedByUser)
                 .Where(m => !m.IsTrash);
 
-            // Filter by mailbox
             switch (request.Mailbox?.ToLower())
             {
                 case "inbox":
@@ -56,7 +55,6 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     break;
             }
 
-            // Search
             if (!string.IsNullOrWhiteSpace(request.Q))
             {
                 var q = request.Q.ToLower();
@@ -67,40 +65,28 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     m.ToMail.ToLower().Contains(q));
             }
 
-            // Date range
             if (request.FromDate.HasValue)
                 query = query.Where(m => m.CreatedAt >= request.FromDate.Value);
             if (request.ToDate.HasValue)
                 query = query.Where(m => m.CreatedAt <= request.ToDate.Value);
 
-            // Mail type
             if (!string.IsNullOrWhiteSpace(request.MailType))
                 query = query.Where(m => m.MailType == request.MailType);
-
-            // Purpose
             if (!string.IsNullOrWhiteSpace(request.Purpose))
                 query = query.Where(m => m.Purpose == request.Purpose);
-
-            // Read status
             if (request.IsRead.HasValue)
                 query = query.Where(m => m.IsRead == request.IsRead.Value);
-
-            // Starred status
             if (request.IsStarred.HasValue)
                 query = query.Where(m => m.IsStarred == request.IsStarred.Value);
 
-            // Get grand total
             int grandTotalCount = await _context.Mails.CountAsync();
 
-            // Sorting
             var sortBy = request.SortBy?.ToLower() ?? "createdat";
             var sortOrder = request.SortOrder?.ToLower() == "desc" ? "descending" : "ascending";
             query = query.OrderBy($"{sortBy} {sortOrder}");
 
-            // Get total count
             int totalCount = await query.CountAsync();
 
-            // Pagination
             var items = await query
                 .Skip((request.Page - 1) * request.Limit)
                 .Take(request.Limit)
@@ -120,13 +106,13 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             return Task.CompletedTask;
         }
 
-       public Task DeleteAsync(Mail mail)
-       {
-           mail.IsTrash = true;
-           mail.UpdatedAt = DateTime.UtcNow;
-           _context.Mails.Update(mail);
-           return Task.CompletedTask;
-       }
+        public Task DeleteAsync(Mail mail)
+        {
+            mail.IsTrash = true;
+            mail.UpdatedAt = DateTime.UtcNow;
+            _context.Mails.Update(mail);
+            return Task.CompletedTask;
+        }
 
         public async Task DeletePermanentlyAsync(long id)
         {
@@ -176,6 +162,18 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 return false;
             
             return await _context.Mails.AnyAsync(m => m.MessageId == messageId);
+        }
+
+        public async Task<List<Mail>> GetByAttachmentPathAsync(string attachmentPath)
+        {
+            if (string.IsNullOrEmpty(attachmentPath))
+                return new List<Mail>();
+            
+            var allMails = await _context.Mails
+                .IgnoreQueryFilters()
+                .ToListAsync();
+            
+            return allMails.Where(m => m.Attachments != null && m.Attachments.Contains(attachmentPath)).ToList();
         }
 
         public async Task SaveChangesAsync()

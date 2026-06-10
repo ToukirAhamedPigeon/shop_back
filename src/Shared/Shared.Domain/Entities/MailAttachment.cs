@@ -31,6 +31,9 @@ namespace shop_back.src.Shared.Domain.Entities
         [Column("mime_type")]
         public string? MimeType { get; set; }
 
+        [Column("file_hash")]
+        public string? FileHash { get; set; }
+
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

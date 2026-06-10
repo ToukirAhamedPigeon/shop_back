@@ -318,11 +318,12 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         public async Task<MailDetailDto?> GetMailByIdAsync(long id)
         {
+            // Remove the !m.IsTrash filter to allow viewing trashed emails
             var mail = await _mailRepository.GetByIdWithRepliesAsync(id);
             if (mail == null) return null;
 
-            // Mark as read if it's a received email
-            if (mail.IsReceived && !mail.IsRead)
+            // Mark as read if it's a received email (but not if in trash)
+            if (mail.IsReceived && !mail.IsRead && !mail.IsTrash)
             {
                 await MarkAsReadAsync(id);
                 mail.IsRead = true;
@@ -337,6 +338,14 @@ namespace shop_back.src.Shared.Infrastructure.Services
             var dtos = items.Select(MapToDto);
             return (dtos, totalCount, grandTotalCount);
         }
+
+        private string ComputeFileHash(byte[] fileBytes)
+        {
+            using var sha256 = System.Security.Cryptography.SHA256.Create();
+            var hashBytes = sha256.ComputeHash(fileBytes);
+            return Convert.ToBase64String(hashBytes);
+        }
+        
 
         public async Task MarkAsReadAsync(long id)
         {
@@ -400,22 +409,69 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         public async Task DeletePermanentlyAsync(long id)
         {
-            // Delete attachments from storage first
+            // Get mail with attachments
             var mail = await _mailRepository.GetByIdAsync(id);
-            if (mail != null && mail.Attachments.Any())
+            if (mail == null)
+            {
+                Console.WriteLine($"⚠️ Mail with ID {id} not found");
+                return;
+            }
+            
+            Console.WriteLine($"🗑️ Permanently deleting mail ID: {id}, Attachments count: {mail.Attachments?.Count ?? 0}");
+            
+            // Delete physical files from remote storage
+            if (mail.Attachments != null && mail.Attachments.Any())
             {
                 foreach (var attachmentPath in mail.Attachments)
                 {
-                    if (!string.IsNullOrEmpty(attachmentPath) && File.Exists(attachmentPath))
+                    if (!string.IsNullOrEmpty(attachmentPath))
                     {
-                        File.Delete(attachmentPath);
+                        try
+                        {
+                            // Check if this attachment is used by any other mail
+                            var otherMailsWithSameAttachment = await _mailRepository.GetByAttachmentPathAsync(attachmentPath);
+                            
+                            // Count only other mails (excluding current one)
+                            var otherMailsCount = otherMailsWithSameAttachment.Count(m => m.Id != id);
+                            
+                            Console.WriteLine($"📎 Attachment: {attachmentPath}, Used by {otherMailsCount} other mails");
+                            
+                            // Only delete if no other mail uses this attachment
+                            if (otherMailsCount == 0)
+                            {
+                                Console.WriteLine($"🗑️ Deleting attachment file: {attachmentPath}");
+                                var deleted = await FileHelper.DeleteFileAsync(attachmentPath);
+                                if (deleted)
+                                {
+                                    Console.WriteLine($"✅ Successfully deleted: {attachmentPath}");
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"❌ Failed to delete: {attachmentPath}");
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine($"📎 Attachment still in use by {otherMailsCount} other mails, skipping delete: {attachmentPath}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"❌ Error deleting attachment {attachmentPath}: {ex.Message}");
+                        }
                     }
                 }
+                
+                // Delete attachment database records
                 await _attachmentRepository.DeleteByMailIdAsync(id);
+                Console.WriteLine($"🗑️ Deleted attachment records for mail ID: {id}");
             }
             
+            // Delete mail record
             await _mailRepository.DeletePermanentlyAsync(id);
             await _mailRepository.SaveChangesAsync();
+            
+            Console.WriteLine($"✅ Mail {id} permanently deleted from database");
         }
 
         public async Task<BulkOperationResponse> BulkActionAsync(BulkMailActionRequest request)
@@ -665,7 +721,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
         }
 
     
-       // Email Fetching from IMAP - FULL UPDATED VERSION
         public async Task FetchAndStoreEmailsAsync()
         {
             var imapHost = Env.GetString("ImapHost");
@@ -723,22 +778,22 @@ namespace shop_back.src.Shared.Infrastructure.Services
                         
                         Console.WriteLine($"Checking email: {message.Subject} (MessageId: {messageId})");
                         
-                        // PROPER DUPLICATE CHECK using dedicated method
+                        // DUPLICATE CHECK - Check if email already exists
                         bool exists = !string.IsNullOrEmpty(messageId) && await _mailRepository.ExistsByMessageIdAsync(messageId);
                         
                         if (exists)
                         {
                             Console.WriteLine($"⚠️ Email already exists in database: {messageId}");
-                            // Mark as read on server since it's already processed
                             await inbox.AddFlagsAsync(uid, MessageFlags.Seen, true, cancellationToken);
-                            continue; // Skip this email completely
+                            continue;
                         }
 
                         Console.WriteLine($"✅ Processing new email: {message.Subject} from {message.From}");
                         
-                        // Save attachments using FileHelper
+                        // Save attachments using FileHelper with duplicate detection
                         var attachmentPaths = new List<string>();
                         var mailAttachments = new List<MailAttachment>();
+                        var processedHashes = new HashSet<string>();
                         
                         foreach (var attachment in message.Attachments)
                         {
@@ -759,32 +814,59 @@ namespace shop_back.src.Shared.Infrastructure.Services
                                         var fileName = part.FileName;
                                         var contentType = part.ContentType?.MimeType ?? "application/octet-stream";
                                         
-                                        var formFile = new FormFile(
-                                            new MemoryStream(fileBytes), 
-                                            0, 
-                                            fileBytes.Length, 
-                                            "file", 
-                                            fileName)
-                                        {
-                                            Headers = new HeaderDictionary(),
-                                            ContentType = contentType
-                                        };
+                                        // Compute file hash for duplicate detection
+                                        var fileHash = ComputeFileHash(fileBytes);
                                         
-                                        var savedPath = await FileHelper.SaveFileAsync(formFile, "received_mails", processImage: false, resizeOptions: null);
+                                        // Check if this exact file already exists in database
+                                        var existingAttachment = await _attachmentRepository.GetByHashAsync(fileHash);
                                         
-                                        if (!string.IsNullOrEmpty(savedPath))
+                                        if (existingAttachment != null && !string.IsNullOrEmpty(existingAttachment.FilePath))
                                         {
-                                            Console.WriteLine($"📎 Saved attachment: {savedPath}");
-                                            attachmentPaths.Add(savedPath);
+                                            // Reuse existing file path
+                                            Console.WriteLine($"📎 Duplicate attachment detected: {fileName}, reusing existing file: {existingAttachment.FilePath}");
+                                            attachmentPaths.Add(existingAttachment.FilePath);
                                             
                                             mailAttachments.Add(new MailAttachment
                                             {
-                                                FileName = part.FileName,
-                                                FilePath = savedPath,
+                                                FileName = fileName,
+                                                FilePath = existingAttachment.FilePath,
                                                 FileSize = fileBytes.Length,
                                                 MimeType = contentType,
+                                                FileHash = fileHash,
                                                 CreatedAt = DateTime.UtcNow
                                             });
+                                        }
+                                        else
+                                        {
+                                            // Create a fake IFormFile to use FileHelper
+                                            var formFile = new FormFile(
+                                                new MemoryStream(fileBytes), 
+                                                0, 
+                                                fileBytes.Length, 
+                                                "file", 
+                                                fileName)
+                                            {
+                                                Headers = new HeaderDictionary(),
+                                                ContentType = contentType
+                                            };
+                                            
+                                            var savedPath = await FileHelper.SaveFileAsync(formFile, "received_mails", processImage: false, resizeOptions: null);
+                                            
+                                            if (!string.IsNullOrEmpty(savedPath))
+                                            {
+                                                Console.WriteLine($"📎 Saved new attachment: {savedPath}");
+                                                attachmentPaths.Add(savedPath);
+                                                
+                                                mailAttachments.Add(new MailAttachment
+                                                {
+                                                    FileName = fileName,
+                                                    FilePath = savedPath,
+                                                    FileSize = fileBytes.Length,
+                                                    MimeType = contentType,
+                                                    FileHash = fileHash,
+                                                    CreatedAt = DateTime.UtcNow
+                                                });
+                                            }
                                         }
                                     }
                                 }
@@ -816,6 +898,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                         await _mailRepository.AddAsync(mail);
                         await _mailRepository.SaveChangesAsync();
                         
+                        // Save attachments with the mailId
                         foreach (var attachment in mailAttachments)
                         {
                             attachment.MailId = mail.Id;
@@ -825,6 +908,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                         
                         newEmailsCount++;
                         Console.WriteLine($"✅ Email #{newEmailsCount} saved with ID: {mail.Id}");
+                        Console.WriteLine($"📎 Total attachments saved/reused: {attachmentPaths.Count}");
                         
                         // Mark as read on server after successful save
                         await inbox.AddFlagsAsync(uid, MessageFlags.Seen, true, cancellationToken);
@@ -849,7 +933,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     }
                 }
 
-                Console.WriteLine($"📊 Fetched {newEmailsCount} new emails");
+                Console.WriteLine($"📊 Fetch completed: {newEmailsCount} new emails, {uids.Count - newEmailsCount} duplicates skipped");
             }
             catch (Exception ex)
             {

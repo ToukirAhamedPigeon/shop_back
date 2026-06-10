@@ -17,6 +17,7 @@ namespace shop_back.src.Shared.Application.Repositories
         Task<int> GetUnreadCountAsync();
         Task<MailStatisticsDto> GetStatisticsAsync();
         Task SaveChangesAsync();
+        Task<List<Mail>> GetByAttachmentPathAsync(string attachmentPath);
         Task<bool> ExistsByMessageIdAsync(string messageId);
     }
 
@@ -34,9 +35,11 @@ namespace shop_back.src.Shared.Application.Repositories
     public interface IMailAttachmentRepository
     {
         Task AddAsync(MailAttachment attachment);
+        Task AddRangeAsync(List<MailAttachment> attachments);
         Task<List<MailAttachment>> GetByMailIdAsync(long mailId);
         Task DeleteByMailIdAsync(long mailId);
-
+        Task<MailAttachment?> GetByHashAsync(string fileHash);
+        Task<List<MailAttachment>> GetByAttachmentPathAsync(string filePath);
         Task SaveChangesAsync();
     }
 }

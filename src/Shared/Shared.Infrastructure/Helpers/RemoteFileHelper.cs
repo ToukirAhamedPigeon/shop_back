@@ -174,5 +174,85 @@ namespace shop_back.src.Shared.Infrastructure.Helpers
             public string? Url { get; set; }
             public string? Error { get; set; }
         }
+        // Add this method to the RemoteFileHelper class
+
+        public async Task<bool> DeleteFileFromPathAsync(string filePath)
+        {
+            if (string.IsNullOrEmpty(filePath) || !UseRemoteStorage)
+            {
+                Console.WriteLine($"❌ Cannot delete: UseRemoteStorage={UseRemoteStorage}, filePath empty={string.IsNullOrEmpty(filePath)}");
+                return false;
+            }
+
+            try
+            {
+                Console.WriteLine($"🗑️ Attempting to delete file: {filePath}");
+                
+                // Extract filename from the URL
+                string fileName;
+                string folder;
+                
+                if (filePath.StartsWith("http"))
+                {
+                    var uri = new Uri(filePath);
+                    var segments = uri.Segments;
+                    folder = segments[segments.Length - 2].TrimEnd('/');
+                    fileName = segments.Last();
+                }
+                else
+                {
+                    // Parse local path like /uploads/mail_attachments/filename
+                    var parts = filePath.Split('/');
+                    if (parts.Length >= 3)
+                    {
+                        folder = parts[parts.Length - 2];
+                        fileName = parts.Last();
+                    }
+                    else
+                    {
+                        folder = "mail_attachments";
+                        fileName = Path.GetFileName(filePath);
+                    }
+                }
+                
+                Console.WriteLine($"📁 Extracted - Folder: {folder}, FileName: {fileName}");
+                
+                using var client = _httpClientFactory.CreateClient();
+                
+                // Set authorization header
+                if (!string.IsNullOrEmpty(_authToken))
+                {
+                    string tokenValue = _authToken.StartsWith("Bearer ") ? _authToken : $"Bearer {_authToken}";
+                    client.DefaultRequestHeaders.Add("Authorization", tokenValue);
+                }
+                
+                // Create request body
+                var requestBody = new
+                {
+                    folder = folder,
+                    fileName = fileName,
+                    filePath = filePath
+                };
+                
+                var content = new StringContent(
+                    JsonSerializer.Serialize(requestBody),
+                    Encoding.UTF8,
+                    "application/json"
+                );
+                
+                var response = await client.PostAsync($"{_remoteUrl}/api/delete.php", content);
+                var responseContent = await response.Content.ReadAsStringAsync();
+                
+                Console.WriteLine($"📡 Delete response: {response.StatusCode} - {responseContent}");
+                
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Remote delete error: {ex.Message}");
+                return false;
+            }
+        }
+        
     }
 }

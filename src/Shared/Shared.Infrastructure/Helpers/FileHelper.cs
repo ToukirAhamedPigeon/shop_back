@@ -177,18 +177,33 @@ namespace shop_back.src.Shared.Infrastructure.Helpers
             }
         }
 
-        public static async Task DeleteFileAsync(string? filePath)
+        public static async Task<bool> DeleteFileAsync(string? filePath)
         {
             if (string.IsNullOrEmpty(filePath))
-                return;
+            {
+                Console.WriteLine($"⚠️ Cannot delete null or empty file path");
+                return false;
+            }
+            
+            Console.WriteLine($"🗑️ Deleting file: {filePath}");
             
             if (_remoteHelper != null && _remoteHelper.UseRemoteStorage)
             {
-                await _remoteHelper.DeleteFileAsync(filePath);
+                var result = await _remoteHelper.DeleteFileFromPathAsync(filePath);
+                if (result)
+                {
+                    Console.WriteLine($"✅ Remote file deleted: {filePath}");
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to delete remote file: {filePath}");
+                }
+                return result;
             }
             else
             {
                 DeleteFileLocal(filePath);
+                return true;
             }
         }
 
