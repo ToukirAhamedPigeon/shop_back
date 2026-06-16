@@ -51,46 +51,6 @@ namespace shop_back.src.Shared.API.Controllers
             return Ok(template);
         }
 
-        [HttpPost]
-        [HasPermissionAny("create-admin-mail-templates")]
-        public async Task<IActionResult> CreateTemplate([FromBody] MailTemplateRequest request)
-        {
-            try
-            {
-                var userId = GetCurrentUserId();
-                var template = await _mailService.CreateTemplateAsync(request, userId);
-                return Ok(new { success = true, template });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { success = false, message = ex.Message });
-            }
-        }
-
-        [HttpPut("{id}")]
-        [HasPermissionAny("update-admin-mail-templates")]
-        public async Task<IActionResult> UpdateTemplate(long id, [FromBody] MailTemplateRequest request)
-        {
-            try
-            {
-                var userId = GetCurrentUserId();
-                var template = await _mailService.UpdateTemplateAsync(id, request, userId);
-                return Ok(new { success = true, template });
-            }
-            catch (KeyNotFoundException)
-            {
-                return NotFound(new { message = "Template not found" });
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-        }
-
         [HttpDelete("{id}")]
         [HasPermissionAny("delete-admin-mail-templates")]
         public async Task<IActionResult> DeleteTemplate(long id)
@@ -108,6 +68,68 @@ namespace shop_back.src.Shared.API.Controllers
             catch (UnauthorizedAccessException ex)
             {
                 return Unauthorized(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        [HasPermissionAny("create-admin-mail-templates")]
+        public async Task<IActionResult> CreateTemplate([FromBody] MailTemplateRequest request)
+        {
+            try
+            {
+                // Additional validation
+                if (string.IsNullOrWhiteSpace(request.Name))
+                    return BadRequest(new { success = false, message = "Template name is required" });
+                
+                if (string.IsNullOrWhiteSpace(request.Subject))
+                    return BadRequest(new { success = false, message = "Template subject is required" });
+                
+                var userId = GetCurrentUserId();
+                var template = await _mailService.CreateTemplateAsync(request, userId);
+                return Ok(new { success = true, template });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPut("{id}")]
+        [HasPermissionAny("update-admin-mail-templates")]
+        public async Task<IActionResult> UpdateTemplate(long id, [FromBody] MailTemplateRequest request)
+        {
+            try
+            {
+                // Additional validation
+                if (string.IsNullOrWhiteSpace(request.Name))
+                    return BadRequest(new { success = false, message = "Template name is required" });
+                
+                if (string.IsNullOrWhiteSpace(request.Subject))
+                    return BadRequest(new { success = false, message = "Template subject is required" });
+                
+                var userId = GetCurrentUserId();
+                var template = await _mailService.UpdateTemplateAsync(id, request, userId);
+                return Ok(new { success = true, template });
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound(new { message = "Template not found" });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
         }
     }

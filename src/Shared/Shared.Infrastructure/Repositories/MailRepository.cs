@@ -36,8 +36,17 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
         public async Task<(IEnumerable<Mail> Items, int TotalCount, int GrandTotalCount)> GetFilteredAsync(MailFilterRequest request)
         {
             IQueryable<Mail> query = _context.Mails
-                .Include(m => m.CreatedByUser)
-                .Where(m => !m.IsTrash);
+                .Include(m => m.CreatedByUser);
+
+            // Apply trash filter based on mailbox
+            if (request.Mailbox?.ToLower() == "trash")
+            {
+                query = query.Where(m => m.IsTrash);
+            }
+            else
+            {
+                query = query.Where(m => !m.IsTrash);
+            }
 
             switch (request.Mailbox?.ToLower())
             {
@@ -51,7 +60,10 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     query = query.Where(m => m.IsStarred);
                     break;
                 case "trash":
-                    query = _context.Mails.Where(m => m.IsTrash);
+                    // Already filtered above
+                    break;
+                default:
+                    // For any other case, show all non-trash
                     break;
             }
 
@@ -60,7 +72,7 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 var q = request.Q.ToLower();
                 query = query.Where(m =>
                     m.Subject.ToLower().Contains(q) ||
-                    m.Body.ToLower().Contains(q) ||
+                    (m.Body != null && m.Body.ToLower().Contains(q)) ||
                     m.FromMail.ToLower().Contains(q) ||
                     m.ToMail.ToLower().Contains(q));
             }

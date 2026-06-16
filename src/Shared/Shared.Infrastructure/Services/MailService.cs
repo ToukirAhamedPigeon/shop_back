@@ -539,17 +539,26 @@ namespace shop_back.src.Shared.Infrastructure.Services
         }
 
         // Template Management Methods
+            // Add these methods/update existing ones in MailService.cs
+
         public async Task<MailTemplateDto> CreateTemplateAsync(MailTemplateRequest request, Guid userId)
         {
+            // Validation
+            if (string.IsNullOrWhiteSpace(request.Name))
+                throw new ArgumentException("Template name is required");
+            
+            if (string.IsNullOrWhiteSpace(request.Subject))
+                throw new ArgumentException("Template subject is required");
+            
             if (await _templateRepository.ExistsByNameAsync(request.Name))
                 throw new InvalidOperationException($"Template with name '{request.Name}' already exists");
 
             var template = new MailTemplate
             {
-                Name = request.Name,
-                Subject = request.Subject,
-                Body = request.Body,
-                Description = request.Description,
+                Name = request.Name.Trim(),
+                Subject = request.Subject.Trim(),
+                Body = request.Body ?? string.Empty,
+                Description = request.Description?.Trim(),
                 IsGlobal = request.IsGlobal,
                 CreatedBy = userId,
                 CreatedAt = DateTime.UtcNow,
@@ -565,6 +574,13 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         public async Task<MailTemplateDto> UpdateTemplateAsync(long id, MailTemplateRequest request, Guid userId)
         {
+            // Validation
+            if (string.IsNullOrWhiteSpace(request.Name))
+                throw new ArgumentException("Template name is required");
+            
+            if (string.IsNullOrWhiteSpace(request.Subject))
+                throw new ArgumentException("Template subject is required");
+
             var template = await _templateRepository.GetByIdAsync(id);
             if (template == null)
                 throw new KeyNotFoundException("Template not found");
@@ -575,10 +591,10 @@ namespace shop_back.src.Shared.Infrastructure.Services
             if (await _templateRepository.ExistsByNameAsync(request.Name, id))
                 throw new InvalidOperationException($"Template with name '{request.Name}' already exists");
 
-            template.Name = request.Name;
-            template.Subject = request.Subject;
-            template.Body = request.Body;
-            template.Description = request.Description;
+            template.Name = request.Name.Trim();
+            template.Subject = request.Subject.Trim();
+            template.Body = request.Body ?? string.Empty;
+            template.Description = request.Description?.Trim();
             template.IsGlobal = request.IsGlobal;
             template.UpdatedAt = DateTime.UtcNow;
 
