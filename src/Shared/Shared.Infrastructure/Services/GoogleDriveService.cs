@@ -100,9 +100,11 @@ namespace shop_back.src.Shared.Application.Services
                     Parents = new List<string> { _backupFolderId ?? string.Empty }
                 };
 
+                // For shared drives, you need to set supportsAllDrives = true
                 var request = _driveService.Files.Create(fileMetadata, fileStream, "application/octet-stream");
                 request.Fields = "id, webContentLink";
-                
+                request.SupportsAllDrives = true; // Important for shared drives
+
                 var result = await request.UploadAsync();
                 if (result.Status != Google.Apis.Upload.UploadStatus.Completed)
                     throw new Exception($"Failed to upload to Google Drive: {result.Exception?.Message}");

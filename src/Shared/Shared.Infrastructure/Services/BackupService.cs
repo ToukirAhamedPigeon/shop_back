@@ -98,8 +98,10 @@ namespace shop_back.src.Shared.Infrastructure.Services
             var fileInfo = new FileInfo(backupPath);
             var checksum = ComputeFileChecksum(backupPath);
 
-            // Get storage destinations
+            // Get all active storage destinations
             var destinations = await _storageRepository.GetActiveDestinationsAsync();
+            
+            Console.WriteLine($"📊 Found {destinations?.Count() ?? 0} storage destinations");
             
             // If no destinations exist, create a default local one
             if (destinations == null || !destinations.Any())
@@ -124,24 +126,22 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 
                 destinations = new List<StorageDestination> { defaultDestination };
             }
+
+            // Upload to ALL destinations
+            var storagePaths = new List<string>();
+            var backupId = 0L;
             
-            var primaryDest = destinations.FirstOrDefault(d => d.IsPrimary) ?? destinations.FirstOrDefault();
-
-            if (primaryDest == null)
-                throw new Exception("No active storage destination found");
-
-            var storagePath = await UploadToStorageAsync(backupPath, primaryDest, fileName);
-
+            // Create backup record first
             var backup = new Backup
             {
                 Name = backupName,
                 FileName = fileName,
                 FilePath = backupPath,
                 FileSize = fileInfo.Length,
-                StorageType = primaryDest.Type,
-                StoragePath = storagePath,
+                StorageType = "Local", // Default
+                StoragePath = backupPath, // Default
                 Checksum = checksum,
-                Status = "Success",
+                Status = "InProgress",
                 CreatedBy = userId,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -149,10 +149,62 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
             await _backupRepository.AddAsync(backup);
             await _backupRepository.SaveChangesAsync();
+            backupId = backup.Id;
 
+            // Upload to each destination
+            foreach (var dest in destinations)
+            {
+                try
+                {
+                    Console.WriteLine($"📤 Uploading to {dest.Type}...");
+                    var storagePath = await UploadToStorageAsync(backupPath, dest, fileName);
+                    storagePaths.Add(storagePath);
+                    
+                    // Update backup with the storage info
+                    backup.StoragePath = string.Join(",", storagePaths);
+                    backup.StorageType = dest.Type;
+                    await _backupRepository.UpdateAsync(backup);
+                    
+                    // Log successful upload
+                    await _logRepository.AddAsync(new BackupLog
+                    {
+                        BackupId = backupId,
+                        Action = "Upload",
+                        Status = "Success",
+                        Message = $"Uploaded to {dest.Type}: {storagePath}",
+                        CreatedBy = userId,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    
+                    Console.WriteLine($"✅ Successfully uploaded to {dest.Type}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ Failed to upload to {dest.Type}: {ex.Message}");
+                    
+                    // Log failed upload
+                    await _logRepository.AddAsync(new BackupLog
+                    {
+                        BackupId = backupId,
+                        Action = "Upload",
+                        Status = "Failed",
+                        Message = $"Failed to upload to {dest.Type}: {ex.Message}",
+                        CreatedBy = userId,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+            
+            // Update backup status
+            backup.Status = "Success";
+            backup.UpdatedAt = DateTime.UtcNow;
+            await _backupRepository.UpdateAsync(backup);
+            await _backupRepository.SaveChangesAsync();
+            
+            // Log the backup creation
             await _logRepository.AddAsync(new BackupLog
             {
-                BackupId = backup.Id,
+                BackupId = backupId,
                 Action = "Create",
                 Status = "Success",
                 Message = $"Backup created: {backupName}",
@@ -162,6 +214,30 @@ namespace shop_back.src.Shared.Infrastructure.Services
             await _logRepository.SaveChangesAsync();
 
             return MapToDto(backup);
+        }
+
+        public async Task<bool> TestRemoteUploadAsync()
+        {
+            try
+            {
+                var testContent = "test content";
+                var bytes = Encoding.UTF8.GetBytes(testContent);
+                var stream = new MemoryStream(bytes);
+                var formFile = new FormFile(stream, 0, bytes.Length, "file", "test.txt")
+                {
+                    Headers = new HeaderDictionary(),
+                    ContentType = "text/plain"
+                };
+                
+                var result = await FileHelper.SaveFileAsync(formFile, "backups", processImage: false);
+                Console.WriteLine($"Test upload result: {result}");
+                return !string.IsNullOrEmpty(result);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Test upload failed: {ex.Message}");
+                return false;
+            }
         }
 
         private async Task<string> CreateDatabaseBackupPureCSharpAsync(string fileName)
@@ -339,6 +415,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
             try
             {
                 Console.WriteLine($"📤 Uploading to {destination.Type}: {destination.Name}");
+                Console.WriteLine($"📤 Destination Config: {JsonSerializer.Serialize(destination.Config)}");
+                Console.WriteLine($"📤 File: {filePath}, Size: {new FileInfo(filePath).Length} bytes");
                 
                 switch (destination.Type.ToLower())
                 {
@@ -347,17 +425,35 @@ namespace shop_back.src.Shared.Infrastructure.Services
                         return await UploadToLocalAsync(fileBytes, fileName);
                         
                     case "googledrive":
-                        // Upload to Google Drive using the file path
-                        var driveResult = await _googleDriveService.UploadFileAsync(filePath, fileName, "backups");
-                        Console.WriteLine($"✅ Uploaded to Google Drive: {driveResult}");
-                        return driveResult;
+                        // Upload to Google Drive
+                        Console.WriteLine($"📤 Uploading to Google Drive...");
+                        try
+                        {
+                            var driveResult = await _googleDriveService.UploadFileAsync(filePath, fileName, "backups");
+                            Console.WriteLine($"✅ Uploaded to Google Drive: {driveResult}");
+                            return driveResult;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"❌ Google Drive upload failed: {ex.Message}");
+                            throw;
+                        }
                         
                     case "remoteserver":
                         // Upload to Remote Server (cPanel)
-                        var bytes = await File.ReadAllBytesAsync(filePath);
-                        var remoteResult = await UploadToRemoteServerAsync(bytes, fileName);
-                        Console.WriteLine($"✅ Uploaded to Remote Server: {remoteResult}");
-                        return remoteResult;
+                        Console.WriteLine($"📤 Uploading to Remote Server...");
+                        try
+                        {
+                            var bytes = await File.ReadAllBytesAsync(filePath);
+                            var remoteResult = await UploadToRemoteServerAsync(bytes, fileName);
+                            Console.WriteLine($"✅ Uploaded to Remote Server: {remoteResult}");
+                            return remoteResult;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"❌ Remote Server upload failed: {ex.Message}");
+                            throw;
+                        }
                         
                     default:
                         throw new Exception($"Unsupported storage type: {destination.Type}");
