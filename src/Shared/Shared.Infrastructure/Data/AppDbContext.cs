@@ -28,6 +28,12 @@ namespace shop_back.src.Shared.Infrastructure.Data
         public DbSet<MailVerification> MailVerifications { get; set; } = null!;
         public DbSet<Option> Options { get; set; } = null!;
 
+        // NEW: Backup entities
+        public DbSet<Backup> Backups { get; set; } = null!;
+        public DbSet<BackupSchedule> BackupSchedules { get; set; } = null!;
+        public DbSet<StorageDestination> StorageDestinations { get; set; } = null!;
+        public DbSet<BackupLog> BackupLogs { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -35,6 +41,7 @@ namespace shop_back.src.Shared.Infrastructure.Data
             // Global query filter for soft delete
             modelBuilder.Entity<User>().HasQueryFilter(u => !u.IsDeleted);
             modelBuilder.Entity<Option>().HasQueryFilter(o => !o.IsDeleted);
+            modelBuilder.Entity<Backup>().HasQueryFilter(b => !b.IsDeleted);
 
             // ============================================
             // UserLog configurations with proper foreign keys
@@ -63,27 +70,27 @@ namespace shop_back.src.Shared.Infrastructure.Data
                 .OnDelete(DeleteBehavior.Cascade);
 
             // ============================================
-            // RefreshToken configuration - Make optional to avoid filter conflicts
+            // RefreshToken configuration
             // ============================================
             modelBuilder.Entity<RefreshToken>()
                 .HasOne(r => r.User)
                 .WithMany(u => u.RefreshTokens)
                 .HasForeignKey(r => r.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
-                .IsRequired(false); // Make optional to avoid filter issues
+                .IsRequired(false);
 
             // ============================================
-            // PasswordReset configuration - Make optional to avoid filter conflicts
+            // PasswordReset configuration
             // ============================================
             modelBuilder.Entity<PasswordReset>()
                 .HasOne(p => p.User)
                 .WithMany()
                 .HasForeignKey(p => p.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
-                .IsRequired(false); // Make optional to avoid filter issues
+                .IsRequired(false);
 
             // ============================================
-            // MailVerification configuration - Make optional to avoid filter conflicts
+            // MailVerification configuration
             // ============================================
             modelBuilder.Entity<MailVerification>()
                 .HasOne(m => m.User)
@@ -93,7 +100,7 @@ namespace shop_back.src.Shared.Infrastructure.Data
                 .IsRequired(false);
 
             // ============================================
-            // Otp configuration - Make optional to avoid filter conflicts
+            // Otp configuration
             // ============================================
             modelBuilder.Entity<Otp>()
                 .HasOne(o => o.User)
@@ -131,7 +138,6 @@ namespace shop_back.src.Shared.Infrastructure.Data
                     .HasForeignKey(e => e.MailId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
-    
 
             // ============================================
             // ModelRole configuration
@@ -246,6 +252,94 @@ namespace shop_back.src.Shared.Infrastructure.Data
                 .WithMany(o => o.Children)
                 .HasForeignKey(o => o.ParentId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // ============================================
+            // NEW: Backup configurations
+            // ============================================
+
+            // Backup configuration
+            modelBuilder.Entity<Backup>(entity =>
+            {
+                entity.ToTable("backups");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.FileName).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.FilePath).IsRequired();
+                entity.Property(e => e.StorageType).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.StoragePath).IsRequired();
+                entity.Property(e => e.Status).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.Checksum).HasMaxLength(128);
+                
+                entity.HasIndex(e => e.CreatedAt);
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.StorageType);
+                entity.HasIndex(e => e.CreatedBy);
+                
+                entity.HasOne(e => e.CreatedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.CreatedBy)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            // BackupSchedule configuration
+            modelBuilder.Entity<BackupSchedule>(entity =>
+            {
+                entity.ToTable("backup_schedules");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.CronExpression).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.StorageDestinations)
+                    .HasColumnType("text[]");
+                
+                entity.HasIndex(e => e.IsActive);
+                entity.HasIndex(e => e.NextRunAt);
+                
+                entity.HasOne(e => e.CreatedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.CreatedBy)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            // StorageDestination configuration
+            modelBuilder.Entity<StorageDestination>(entity =>
+            {
+                entity.ToTable("storage_destinations");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Type).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.ConfigJson).HasColumnName("config").HasColumnType("jsonb");
+                
+                entity.HasIndex(e => e.IsActive);
+                entity.HasIndex(e => e.IsPrimary);
+                
+                entity.HasOne(e => e.CreatedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.CreatedBy)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            // BackupLog configuration
+            modelBuilder.Entity<BackupLog>(entity =>
+            {
+                entity.ToTable("backup_logs");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Action).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.Status).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.Details).HasColumnType("jsonb");
+                
+                entity.HasIndex(e => e.BackupId);
+                entity.HasIndex(e => e.CreatedAt);
+                
+                entity.HasOne(e => e.Backup)
+                    .WithMany()
+                    .HasForeignKey(e => e.BackupId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                
+                entity.HasOne(e => e.CreatedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.CreatedBy)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
 
             // ============================================
             // DateTime conversion to UTC for all DateTime properties

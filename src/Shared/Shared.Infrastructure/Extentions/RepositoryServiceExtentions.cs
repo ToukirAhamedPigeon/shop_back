@@ -26,6 +26,10 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
             services.AddScoped<IUserLogRepository, UserLogRepository>();
             services.AddScoped<IUserTableCombinationRepository, UserTableCombinationRepository>();
             services.AddScoped<IOptionRepository, OptionRepository>();
+            services.AddScoped<IBackupRepository, BackupRepository>();
+            services.AddScoped<IBackupScheduleRepository, BackupScheduleRepository>();
+            services.AddScoped<IStorageDestinationRepository, StorageDestinationRepository>();
+            services.AddScoped<IBackupLogRepository, BackupLogRepository>();
             return services;
         }
     }

@@ -113,3 +113,7 @@ shop_back.sln
 Properties/
 dump.rdb
 wwwroot/
+
+credentials.json
+*.json
+!appsettings*.json

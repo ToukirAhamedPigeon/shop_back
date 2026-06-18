@@ -35,6 +35,8 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
             services.AddSingleton<IHostedService>(provider => 
                 provider.GetRequiredService<EmailFetchBackgroundService>());
             services.AddScoped<UserLogHelper>();
+            services.AddScoped<IBackupService, BackupService>();
+            services.AddScoped<IGoogleDriveService, GoogleDriveService>();
             services.AddHttpContextAccessor();
 
             return services;

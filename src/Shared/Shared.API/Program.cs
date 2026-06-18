@@ -1,3 +1,4 @@
+// src/Shared/Shared.API/Program.cs
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
@@ -13,15 +14,42 @@ using StackExchange.Redis;
 using System.IdentityModel.Tokens.Jwt;
 using shop_back.src.Shared.Infrastructure.Helpers;
 
-try { Env.Load(); } catch { }
+// Load .env file at the very beginning
+try
+{
+    var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"));
+    if (File.Exists(envPath))
+    {
+        Env.Load(envPath);
+        Console.WriteLine($"✅ Loaded .env from: {envPath}");
+    }
+    else
+    {
+        // Try current directory
+        var currentEnvPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
+        if (File.Exists(currentEnvPath))
+        {
+            Env.Load(currentEnvPath);
+            Console.WriteLine($"✅ Loaded .env from: {currentEnvPath}");
+        }
+        else
+        {
+            Console.WriteLine($"⚠️ .env file not found at: {envPath} or {currentEnvPath}");
+        }
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"❌ Failed to load .env: {ex.Message}");
+}
 
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ------------------- LOAD .ENV -------------------
-var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"));
-try { Env.Load(envPath); } catch { }
+// ------------------- LOAD .ENV AGAIN FOR SAFETY -------------------
+var envPathAgain = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"));
+try { Env.Load(envPathAgain); } catch { }
 
 // ------------------- FILE UPLOAD SIZE LIMITS -------------------
 builder.Services.Configure<FormOptions>(options =>
@@ -34,12 +62,12 @@ builder.Services.Configure<FormOptions>(options =>
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
     serverOptions.Limits.MaxRequestBodySize = 200 * 1024 * 1024; // 200MB
-    // serverOptions.Limits.MaxRequestBufferSize = 200 * 1024 * 1024;
-    // serverOptions.Limits.MaxRequestHeaderSize = 200 * 1024 * 1024;
 });
 
 // ------------------- DATABASE -------------------
 var connStr = Env.GetString("DefaultConnection");
+Console.WriteLine($"🔗 Database Connection String: {(string.IsNullOrEmpty(connStr) ? "NOT FOUND!" : "Loaded")}");
+
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connStr));
 
@@ -57,7 +85,6 @@ builder.Services.AddRepositories();
 builder.Services.AddServices();
 
 // ------------------- FILE STORAGE HELPERS -------------------
-// Register as Singleton instead of Scoped
 builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
 {
     ["FILE_STORAGE_TYPE"] = Env.GetString("FILE_STORAGE_TYPE") ?? "remote",
@@ -65,8 +92,7 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     ["REMOTE_STORAGE_TOKEN"] = Env.GetString("REMOTE_STORAGE_TOKEN") ?? ""
 });
 
-// ডিবাগ
-Console.WriteLine($"After manual add - FILE_STORAGE_TYPE: {builder.Configuration["FILE_STORAGE_TYPE"]}");
+Console.WriteLine($"FILE_STORAGE_TYPE: {builder.Configuration["FILE_STORAGE_TYPE"]}");
 builder.Services.AddSingleton<RemoteFileHelper>();
 
 // ------------------- JWT AUTHENTICATION -------------------
@@ -76,7 +102,7 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.RequireHttpsMetadata = false; // dev-safe
+        options.RequireHttpsMetadata = false;
         options.SaveToken = true;
 
         options.TokenValidationParameters = new TokenValidationParameters
@@ -90,10 +116,9 @@ builder.Services
         };
     });
 
-// ------------------- AUTHORIZATION (🔥 IMPORTANT) -------------------
+// ------------------- AUTHORIZATION -------------------
 builder.Services.AddAuthorization();
 
-// 🔑 Dynamic permission system
 builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionHandlerService>();
 
@@ -133,21 +158,15 @@ builder.Services.AddCors(p =>
     });
 });
 
-// কনফিগারেশন চেক করুন
 var fileStorageType = builder.Configuration["FILE_STORAGE_TYPE"];
 var remoteUrl = builder.Configuration["REMOTE_STORAGE_URL"];
 Console.WriteLine($"=== CONFIGURATION CHECK ===");
 Console.WriteLine($"FILE_STORAGE_TYPE from config: '{fileStorageType}'");
 Console.WriteLine($"REMOTE_STORAGE_URL from config: '{remoteUrl}'");
 
-// এনভায়রনমেন্ট ভেরিয়েবল থেকেও চেক করুন
-var envStorageType = Environment.GetEnvironmentVariable("FILE_STORAGE_TYPE");
-Console.WriteLine($"FILE_STORAGE_TYPE from env: '{envStorageType}'");
-
 var app = builder.Build();
 
-// ------------------- INITIALIZE FILE HELPER WITH REMOTE STORAGE -------------------
-// Get the service directly (now works because it's Singleton)
+// ------------------- INITIALIZE FILE HELPER -------------------
 var remoteFileHelper = app.Services.GetRequiredService<RemoteFileHelper>();
 var webHostEnvironment = app.Services.GetRequiredService<IWebHostEnvironment>();
 FileHelper.Initialize(remoteFileHelper, webHostEnvironment);
@@ -159,14 +178,11 @@ app.UseHttpsRedirection();
 app.UseRouting();
 app.UseCors("AllowFrontend");
 
-// ------------------- 🔐 AUTH PIPELINE (ORDER MATTERS) -------------------
 app.UseAuthentication();
 app.UseAuthorization();
 
-// CSRF middleware should NOT interfere with auth
 app.UseMiddleware<CsrfAndJwtMiddleware>();
 
-// ------------------- OTHER -------------------
 app.UseStaticFiles();
 app.UseSwagger();
 app.UseSwaggerUI();
