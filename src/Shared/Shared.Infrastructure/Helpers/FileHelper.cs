@@ -187,21 +187,31 @@ namespace shop_back.src.Shared.Infrastructure.Helpers
             
             Console.WriteLine($"🗑️ Deleting file: {filePath}");
             
-            if (_remoteHelper != null && _remoteHelper.UseRemoteStorage)
+            // Check if it's a remote storage path
+            if (filePath.StartsWith("http") || filePath.StartsWith("/uploads/"))
             {
-                var result = await _remoteHelper.DeleteFileFromPathAsync(filePath);
-                if (result)
+                if (_remoteHelper != null && _remoteHelper.UseRemoteStorage)
                 {
-                    Console.WriteLine($"✅ Remote file deleted: {filePath}");
+                    var result = await _remoteHelper.DeleteFileFromPathAsync(filePath);
+                    if (result)
+                    {
+                        Console.WriteLine($"✅ Remote file deleted: {filePath}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"❌ Failed to delete remote file: {filePath}");
+                    }
+                    return result;
                 }
                 else
                 {
-                    Console.WriteLine($"❌ Failed to delete remote file: {filePath}");
+                    Console.WriteLine($"⚠️ Remote helper not configured for: {filePath}");
+                    return false;
                 }
-                return result;
             }
             else
             {
+                // Local file deletion
                 DeleteFileLocal(filePath);
                 return true;
             }

@@ -188,7 +188,7 @@ namespace shop_back.src.Shared.Infrastructure.Helpers
             {
                 Console.WriteLine($"🗑️ Attempting to delete file: {filePath}");
                 
-                // Extract filename from the URL
+                // Extract filename and folder from the path
                 string fileName;
                 string folder;
                 
@@ -196,12 +196,32 @@ namespace shop_back.src.Shared.Infrastructure.Helpers
                 {
                     var uri = new Uri(filePath);
                     var segments = uri.Segments;
-                    folder = segments[segments.Length - 2].TrimEnd('/');
-                    fileName = segments.Last();
+                    // Get the folder (second last segment after /uploads/)
+                    var uploadsIndex = Array.IndexOf(segments, "uploads/") + 1;
+                    if (uploadsIndex > 0 && segments.Length > uploadsIndex + 1)
+                    {
+                        folder = segments[uploadsIndex].TrimEnd('/');
+                        fileName = segments.Last();
+                    }
+                    else
+                    {
+                        // Fallback: try to parse differently
+                        var pathParts = uri.AbsolutePath.Split('/');
+                        if (pathParts.Length >= 3)
+                        {
+                            folder = pathParts[pathParts.Length - 2];
+                            fileName = pathParts.Last();
+                        }
+                        else
+                        {
+                            folder = "backups";
+                            fileName = Path.GetFileName(uri.LocalPath);
+                        }
+                    }
                 }
                 else
                 {
-                    // Parse local path like /uploads/mail_attachments/filename
+                    // Parse local path like /uploads/backups/filename or /uploads/backups/filename.ext
                     var parts = filePath.Split('/');
                     if (parts.Length >= 3)
                     {
@@ -210,10 +230,13 @@ namespace shop_back.src.Shared.Infrastructure.Helpers
                     }
                     else
                     {
-                        folder = "mail_attachments";
+                        folder = "backups";
                         fileName = Path.GetFileName(filePath);
                     }
                 }
+                
+                // Remove any query parameters from filename
+                fileName = fileName.Split('?').First();
                 
                 Console.WriteLine($"📁 Extracted - Folder: {folder}, FileName: {fileName}");
                 
@@ -240,6 +263,7 @@ namespace shop_back.src.Shared.Infrastructure.Helpers
                     "application/json"
                 );
                 
+                Console.WriteLine($"📡 Sending delete request to: {_remoteUrl}/api/delete.php");
                 var response = await client.PostAsync($"{_remoteUrl}/api/delete.php", content);
                 var responseContent = await response.Content.ReadAsStringAsync();
                 

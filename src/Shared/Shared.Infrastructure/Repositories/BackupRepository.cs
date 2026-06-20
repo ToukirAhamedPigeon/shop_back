@@ -149,6 +149,14 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                 .AnyAsync(b => b.FileName == fileName && !b.IsDeleted);
         }
 
+        public async Task<Backup?> GetByIdWithDeletedAsync(long id)
+        {
+            return await _context.Set<Backup>()
+                .Include(b => b.CreatedByUser)
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(b => b.Id == id);
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

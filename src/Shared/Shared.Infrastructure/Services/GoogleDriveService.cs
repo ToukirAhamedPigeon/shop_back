@@ -1,4 +1,6 @@
 // src/Shared/Shared.Infrastructure/Services/GoogleDriveService.cs
+// Remove the interface definition from here - it's already in Shared.Application
+
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Drive.v3;
 using Google.Apis.Drive.v3.Data;
@@ -15,16 +17,8 @@ using DriveFile = Google.Apis.Drive.v3.Data.File;
 
 namespace shop_back.src.Shared.Application.Services
 {
-    // public interface IGoogleDriveService
-    // {
-    //     Task<string> UploadFileAsync(string filePath, string fileName, string folder);
-    //     Task<string> UploadFileFromStreamAsync(Stream fileStream, string fileName, string folder);
-    //     Task DeleteFileAsync(string fileId);
-    //     Task DownloadFileAsync(string fileId, string destinationPath);
-    //     Task<bool> TestConnectionAsync();
-    //     Task CleanupOldFilesAsync(string folder, int retentionDays);
-    //     Task DeleteFileFromPathAsync(string filePath);
-    // }
+    // REMOVE THIS INTERFACE DEFINITION - It's already in Shared.Application
+    // public interface IGoogleDriveService { ... }
 
     public class GoogleDriveService : IGoogleDriveService
     {
@@ -38,6 +32,10 @@ namespace shop_back.src.Shared.Application.Services
             var folderId = configuration["GOOGLE_DRIVE_BACKUP_FOLDER_ID"] ?? "";
             
             _backupFolderId = folderId;
+            
+            Console.WriteLine($"📁 Google Drive Config:");
+            Console.WriteLine($"  Folder ID: {_backupFolderId}");
+            Console.WriteLine($"  Account Type: Personal Gmail (No Shared Drives)");
             
             try
             {
@@ -94,25 +92,31 @@ namespace shop_back.src.Shared.Application.Services
 
             try
             {
+                Console.WriteLine($"📤 Uploading to Google Drive (Personal Account)...");
+                Console.WriteLine($"  File: {fileName}");
+                Console.WriteLine($"  Folder ID: {_backupFolderId}");
+
                 var fileMetadata = new DriveFile
                 {
                     Name = fileName,
                     Parents = new List<string> { _backupFolderId ?? string.Empty }
                 };
 
-                // For shared drives, you need to set supportsAllDrives = true
                 var request = _driveService.Files.Create(fileMetadata, fileStream, "application/octet-stream");
                 request.Fields = "id, webContentLink";
-                request.SupportsAllDrives = true; // Important for shared drives
 
                 var result = await request.UploadAsync();
+                
                 if (result.Status != Google.Apis.Upload.UploadStatus.Completed)
                     throw new Exception($"Failed to upload to Google Drive: {result.Exception?.Message}");
 
-                return request.ResponseBody?.Id ?? string.Empty;
+                var fileId = request.ResponseBody?.Id ?? string.Empty;
+                Console.WriteLine($"✅ Uploaded to Google Drive: {fileId}");
+                return fileId;
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"❌ Upload failed: {ex.Message}");
                 throw new Exception($"Failed to upload file to Google Drive: {ex.Message}");
             }
         }
@@ -124,22 +128,39 @@ namespace shop_back.src.Shared.Application.Services
 
             try
             {
-                await _driveService.Files.Delete(fileId).ExecuteAsync();
+                var request = _driveService.Files.Delete(fileId);
+                await request.ExecuteAsync();
+                Console.WriteLine($"🗑️ Deleted Google Drive file ID: {fileId}");
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"❌ Failed to delete file from Google Drive: {ex.Message}");
                 throw new Exception($"Failed to delete file from Google Drive: {ex.Message}");
             }
         }
 
         public async Task DeleteFileFromPathAsync(string filePath)
         {
-            if (!_isConfigured || _driveService == null)
+            if (!_isConfigured || _driveService == null || string.IsNullOrEmpty(filePath))
                 return;
 
             try
             {
+                Console.WriteLine($"🗑️ Deleting Google Drive file: {filePath}");
+                
+                if (filePath.Length > 5 && !filePath.Contains("/") && !filePath.Contains("."))
+                {
+                    await DeleteFileAsync(filePath);
+                    return;
+                }
+                
                 var fileName = Path.GetFileName(filePath);
+                if (string.IsNullOrEmpty(fileName))
+                {
+                    Console.WriteLine($"⚠️ Could not extract filename from: {filePath}");
+                    return;
+                }
+                
                 var request = _driveService.Files.List();
                 request.Q = $"name='{fileName}' and '{_backupFolderId}' in parents";
                 request.Fields = "files(id, name)";
@@ -150,8 +171,12 @@ namespace shop_back.src.Shared.Application.Services
                     foreach (var file in result.Files)
                     {
                         await DeleteFileAsync(file.Id);
-                        Console.WriteLine($"🗑️ Deleted Google Drive file: {file.Name}");
+                        Console.WriteLine($"🗑️ Deleted Google Drive file: {file.Name} (ID: {file.Id})");
                     }
+                }
+                else
+                {
+                    Console.WriteLine($"⚠️ File not found in Google Drive: {fileName}");
                 }
             }
             catch (Exception ex)
@@ -167,9 +192,12 @@ namespace shop_back.src.Shared.Application.Services
 
             try
             {
+                Console.WriteLine($"📥 Downloading from Google Drive: {fileId}");
+                
                 var request = _driveService.Files.Get(fileId);
                 using var stream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write);
                 await request.DownloadAsync(stream);
+                Console.WriteLine($"✅ Downloaded Google Drive file: {fileId} to {destinationPath}");
             }
             catch (Exception ex)
             {
@@ -184,14 +212,18 @@ namespace shop_back.src.Shared.Application.Services
 
             try
             {
+                Console.WriteLine($"🔍 Testing Google Drive connection...");
                 var request = _driveService.Files.List();
                 request.PageSize = 1;
                 request.Fields = "files(id, name)";
                 var result = await request.ExecuteAsync();
+                Console.WriteLine($"✅ Google Drive connection successful!");
+                Console.WriteLine($"  Files found: {result.Files?.Count ?? 0}");
                 return result.Files != null;
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"❌ Google Drive connection failed: {ex.Message}");
                 return false;
             }
         }

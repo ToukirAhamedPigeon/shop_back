@@ -117,3 +117,4 @@ wwwroot/
 credentials.json
 *.json
 !appsettings*.json
+src/Shared/Shared.API/backups/*

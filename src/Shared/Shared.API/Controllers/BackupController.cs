@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using shop_back.src.Shared.Application.DTOs.Backups;
+using shop_back.src.Shared.Application.DTOs.Common;
 using shop_back.src.Shared.Application.Services;
 using shop_back.src.Shared.Infrastructure.Services.Authorization;
 using System.IdentityModel.Tokens.Jwt;
@@ -69,6 +70,58 @@ namespace shop_back.src.Shared.API.Controllers
             var userId = GetCurrentUserId();
             await _backupService.DeleteBackupAsync(id, userId);
             return Ok(new { success = true });
+        }
+
+        [HttpPost("bulk-delete")]
+        [HasPermissionAny("delete-admin-backups")]
+        public async Task<IActionResult> BulkDeleteBackups([FromBody] BulkOperationRequest request)
+        {
+            var userId = GetCurrentUserId();
+            var response = new BulkOperationResponse
+            {
+                Success = true,
+                TotalCount = request.Ids.Count,
+                SuccessCount = 0,
+                FailedCount = 0,
+                Errors = new List<BulkOperationError>()
+            };
+
+            foreach (var id in request.Ids)
+            {
+                try
+                {
+                    if (!long.TryParse(id, out var backupId))
+                    {
+                        response.FailedCount++;
+                        response.Errors.Add(new BulkOperationError
+                        {
+                            Id = Guid.Empty,
+                            Error = $"Invalid backup ID: {id}"
+                        });
+                        continue;
+                    }
+
+                    await _backupService.DeleteBackupAsync(backupId, userId);
+                    response.SuccessCount++;
+                }
+                catch (Exception ex)
+                {
+                    response.FailedCount++;
+                    response.Errors.Add(new BulkOperationError
+                    {
+                        Id = Guid.Empty,
+                        Error = ex.Message
+                    });
+                }
+            }
+
+            response.Message = $"{response.SuccessCount} backup(s) deleted successfully";
+            if (response.FailedCount > 0)
+            {
+                response.Message += $", {response.FailedCount} failed";
+            }
+
+            return Ok(response);
         }
 
         [HttpGet("{id}/download")]

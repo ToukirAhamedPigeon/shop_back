@@ -23,6 +23,7 @@ namespace shop_back.src.Shared.Application.DTOs.Backups
     {
         public string? Name { get; set; }
         public List<string>? StorageDestinations { get; set; }
+        public bool IsManual { get; set; } = true; // true for manual, false for auto
     }
 
     public class BackupFilterRequest

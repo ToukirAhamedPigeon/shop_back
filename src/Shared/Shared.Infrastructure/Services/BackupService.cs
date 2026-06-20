@@ -43,7 +43,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
             _configuration = configuration;
             _googleDriveService = googleDriveService;
             
-            // Try multiple ways to get connection string
             _connectionString = GetConnectionString();
             
             if (string.IsNullOrEmpty(_connectionString))
@@ -67,13 +66,11 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         private string GetConnectionString()
         {
-            // Try multiple sources - handle null values safely
             var sources = new List<string?>();
             sources.Add(_configuration.GetConnectionString("DefaultConnection"));
             sources.Add(Environment.GetEnvironmentVariable("DefaultConnection"));
             sources.Add(_configuration["DefaultConnection"]);
             
-            // Also try to get from DotNetEnv directly
             try
             {
                 var envConn = DotNetEnv.Env.GetString("DefaultConnection");
@@ -81,16 +78,26 @@ namespace shop_back.src.Shared.Infrastructure.Services
             }
             catch { }
 
-            // Return the first non-null, non-empty value
             return sources.FirstOrDefault(s => !string.IsNullOrEmpty(s)) ?? string.Empty;
         }
 
         public async Task<BackupDto> CreateBackupAsync(CreateBackupRequest request, Guid? userId = null)
         {
-            var backupName = request?.Name ?? $"Backup_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
-            var fileName = $"{backupName}.sql";
+            // Generate backup name with readable date and time
+            var now = DateTime.UtcNow;
+            var year = now.Year;
+            var month = now.ToString("MMMM").ToLower();
+            var day = now.ToString("dd");
+            var hour = now.ToString("HH");
+            var minute = now.ToString("mm");
+            var second = now.ToString("ss");
             
-            var backupPath = await CreateDatabaseBackupPureCSharpAsync(fileName);
+            // Determine backup type from request
+            var backupType = request?.IsManual == true ? "manual" : "auto";
+            
+            // Create the backup file (temporary name)
+            var tempFileName = $"{backupType}_{year}_{month}_{day}_T_{hour}_{minute}_{second}.sql";
+            var backupPath = await CreateDatabaseBackupPureCSharpAsync(tempFileName);
             
             if (string.IsNullOrEmpty(backupPath))
                 throw new Exception("Failed to create database backup");
@@ -101,74 +108,66 @@ namespace shop_back.src.Shared.Infrastructure.Services
             // Get all active storage destinations
             var destinations = await _storageRepository.GetActiveDestinationsAsync();
             
-            Console.WriteLine($"📊 Found {destinations?.Count() ?? 0} storage destinations");
-            
-            // If no destinations exist, create a default local one
-            if (destinations == null || !destinations.Any())
+            // Filter destinations based on request (if specified)
+            var selectedDestinations = destinations;
+            if (request?.StorageDestinations != null && request.StorageDestinations.Any())
             {
-                Console.WriteLine("⚠️ No storage destinations found. Creating default local storage.");
+                selectedDestinations = destinations.Where(d => request.StorageDestinations.Contains(d.Type)).ToList();
                 
-                var defaultDestination = new StorageDestination
+                if (!selectedDestinations.Any())
                 {
-                    Type = "Local",
-                    Name = "Local Storage",
-                    Config = new Dictionary<string, object> { { "path", "backups" } },
-                    Priority = 1,
-                    IsActive = true,
-                    IsPrimary = true,
-                    CreatedBy = userId,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                
-                await _storageRepository.AddAsync(defaultDestination);
-                await _storageRepository.SaveChangesAsync();
-                
-                destinations = new List<StorageDestination> { defaultDestination };
+                    selectedDestinations = destinations;
+                }
             }
 
-            // Upload to ALL destinations
-            var storagePaths = new List<string>();
-            var backupId = 0L;
+            Console.WriteLine($"📊 Found {selectedDestinations?.Count() ?? 0} storage destinations");
             
-            // Create backup record first
-            var backup = new Backup
+            if (selectedDestinations == null || !selectedDestinations.Any())
             {
-                Name = backupName,
-                FileName = fileName,
-                FilePath = backupPath,
-                FileSize = fileInfo.Length,
-                StorageType = "Local", // Default
-                StoragePath = backupPath, // Default
-                Checksum = checksum,
-                Status = "InProgress",
-                CreatedBy = userId,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
+                throw new Exception("No active storage destinations found. Please configure at least one storage destination.");
+            }
 
-            await _backupRepository.AddAsync(backup);
-            await _backupRepository.SaveChangesAsync();
-            backupId = backup.Id;
-
-            // Upload to each destination
-            foreach (var dest in destinations)
+            // Upload to each destination and create separate backup records
+            var backupRecords = new List<Backup>();
+            
+            foreach (var dest in selectedDestinations)
             {
                 try
                 {
-                    Console.WriteLine($"📤 Uploading to {dest.Type}...");
-                    var storagePath = await UploadToStorageAsync(backupPath, dest, fileName);
-                    storagePaths.Add(storagePath);
+                    // Generate location-specific name
+                    var locationType = GetLocationType(dest.Type);
+                    var backupName = $"Backup_{backupType}_{locationType}_{year}_{month}_{day}_T_{hour}_{minute}_{second}";
+                    var fileName = $"{backupName}.sql";
                     
-                    // Update backup with the storage info
-                    backup.StoragePath = string.Join(",", storagePaths);
-                    backup.StorageType = dest.Type;
-                    await _backupRepository.UpdateAsync(backup);
+                    Console.WriteLine($"📤 Uploading to {dest.Type}...");
+                    Console.WriteLine($"📝 File name: {fileName}");
+                    
+                    var storagePath = await UploadToStorageAsync(backupPath, dest, fileName);
+                    
+                    // Create a backup record for this destination
+                    var backup = new Backup
+                    {
+                        Name = backupName,
+                        FileName = fileName,
+                        FilePath = backupPath,
+                        FileSize = fileInfo.Length,
+                        StorageType = dest.Type,
+                        StoragePath = storagePath,
+                        Checksum = checksum,
+                        Status = "Success",
+                        CreatedBy = userId,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    await _backupRepository.AddAsync(backup);
+                    await _backupRepository.SaveChangesAsync();
+                    backupRecords.Add(backup);
                     
                     // Log successful upload
                     await _logRepository.AddAsync(new BackupLog
                     {
-                        BackupId = backupId,
+                        BackupId = backup.Id,
                         Action = "Upload",
                         Status = "Success",
                         Message = $"Uploaded to {dest.Type}: {storagePath}",
@@ -182,10 +181,34 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 {
                     Console.WriteLine($"❌ Failed to upload to {dest.Type}: {ex.Message}");
                     
+                    // Create a failed backup record
+                    var locationType = GetLocationType(dest.Type);
+                    var backupName = $"Backup_{backupType}_{locationType}_{year}_{month}_{day}_T_{hour}_{minute}_{second}";
+                    var fileName = $"{backupName}.sql";
+                    
+                    var backup = new Backup
+                    {
+                        Name = backupName,
+                        FileName = fileName,
+                        FilePath = backupPath,
+                        FileSize = fileInfo.Length,
+                        StorageType = dest.Type,
+                        StoragePath = string.Empty,
+                        Checksum = checksum,
+                        Status = "Failed",
+                        CreatedBy = userId,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    await _backupRepository.AddAsync(backup);
+                    await _backupRepository.SaveChangesAsync();
+                    backupRecords.Add(backup);
+                    
                     // Log failed upload
                     await _logRepository.AddAsync(new BackupLog
                     {
-                        BackupId = backupId,
+                        BackupId = backup.Id,
                         Action = "Upload",
                         Status = "Failed",
                         Message = $"Failed to upload to {dest.Type}: {ex.Message}",
@@ -195,49 +218,20 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 }
             }
             
-            // Update backup status
-            backup.Status = "Success";
-            backup.UpdatedAt = DateTime.UtcNow;
-            await _backupRepository.UpdateAsync(backup);
-            await _backupRepository.SaveChangesAsync();
-            
-            // Log the backup creation
-            await _logRepository.AddAsync(new BackupLog
-            {
-                BackupId = backupId,
-                Action = "Create",
-                Status = "Success",
-                Message = $"Backup created: {backupName}",
-                CreatedBy = userId,
-                CreatedAt = DateTime.UtcNow
-            });
             await _logRepository.SaveChangesAsync();
 
-            return MapToDto(backup);
+            return MapToDto(backupRecords.FirstOrDefault());
         }
 
-        public async Task<bool> TestRemoteUploadAsync()
+        private string GetLocationType(string storageType)
         {
-            try
+            return storageType.ToLower() switch
             {
-                var testContent = "test content";
-                var bytes = Encoding.UTF8.GetBytes(testContent);
-                var stream = new MemoryStream(bytes);
-                var formFile = new FormFile(stream, 0, bytes.Length, "file", "test.txt")
-                {
-                    Headers = new HeaderDictionary(),
-                    ContentType = "text/plain"
-                };
-                
-                var result = await FileHelper.SaveFileAsync(formFile, "backups", processImage: false);
-                Console.WriteLine($"Test upload result: {result}");
-                return !string.IsNullOrEmpty(result);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Test upload failed: {ex.Message}");
-                return false;
-            }
+                "local" => "Local",
+                "googledrive" => "GDrive",
+                "remoteserver" => "Remote",
+                _ => storageType
+            };
         }
 
         private async Task<string> CreateDatabaseBackupPureCSharpAsync(string fileName)
@@ -338,7 +332,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
                                 var stringValue = value?.ToString() ?? string.Empty;
                                 stringValue = stringValue.Replace("'", "''");
                                 
-                                // Handle different data types
                                 if (value is DateTime dateTime)
                                 {
                                     stringValue = dateTime.ToString("yyyy-MM-dd HH:mm:ss.fff");
@@ -417,6 +410,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 Console.WriteLine($"📤 Uploading to {destination.Type}: {destination.Name}");
                 Console.WriteLine($"📤 Destination Config: {JsonSerializer.Serialize(destination.Config)}");
                 Console.WriteLine($"📤 File: {filePath}, Size: {new FileInfo(filePath).Length} bytes");
+                Console.WriteLine($"📤 Target file name: {fileName}");
                 
                 switch (destination.Type.ToLower())
                 {
@@ -425,7 +419,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
                         return await UploadToLocalAsync(fileBytes, fileName);
                         
                     case "googledrive":
-                        // Upload to Google Drive
                         Console.WriteLine($"📤 Uploading to Google Drive...");
                         try
                         {
@@ -440,7 +433,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
                         }
                         
                     case "remoteserver":
-                        // Upload to Remote Server (cPanel)
                         Console.WriteLine($"📤 Uploading to Remote Server...");
                         try
                         {
@@ -481,8 +473,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
         {
             try
             {
-                // Use RemoteFileHelper to upload to cPanel
-                // Create a fake IFormFile to use with RemoteFileHelper
                 var stream = new MemoryStream(fileBytes);
                 var formFile = new FormFile(stream, 0, fileBytes.Length, "file", fileName)
                 {
@@ -490,7 +480,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     ContentType = "application/sql"
                 };
                 
-                // Use your existing RemoteFileHelper
                 var result = await FileHelper.SaveFileAsync(formFile, "backups", processImage: false);
                 
                 if (string.IsNullOrEmpty(result))
@@ -513,61 +502,72 @@ namespace shop_back.src.Shared.Infrastructure.Services
             return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
         }
 
-        public async Task CleanupOldBackupsAsync(int retentionDays, Guid? userId = null)
+        public async Task DeleteBackupAsync(long id, Guid? userId = null)
         {
-            var oldBackups = await _backupRepository.GetOldBackupsAsync(retentionDays);
-            
-            foreach (var backup in oldBackups)
+            var backup = await _backupRepository.GetByIdAsync(id);
+            if (backup == null)
+                throw new Exception("Backup not found");
+
+            Console.WriteLine($"🗑️ Deleting backup: {backup.Name} (ID: {id})");
+            Console.WriteLine($"📁 Storage Type: {backup.StorageType}");
+            Console.WriteLine($"📁 Storage Path: {backup.StoragePath}");
+
+            try
             {
-                try
+                switch (backup.StorageType.ToLower())
                 {
-                    await DeleteFromStorageAsync(backup);
-                    await _backupRepository.DeleteAsync(backup.Id);
-                    
-                    await _logRepository.AddAsync(new BackupLog
-                    {
-                        BackupId = backup.Id,
-                        Action = "Cleanup",
-                        Status = "Success",
-                        Message = $"Deleted backup older than {retentionDays} days",
-                        CreatedBy = userId,
-                        CreatedAt = DateTime.UtcNow
-                    });
-                }
-                catch (Exception ex)
-                {
-                    await _logRepository.AddAsync(new BackupLog
-                    {
-                        BackupId = backup.Id,
-                        Action = "Cleanup",
-                        Status = "Failed",
-                        Message = $"Failed to delete backup: {ex.Message}",
-                        CreatedBy = userId,
-                        CreatedAt = DateTime.UtcNow
-                    });
+                    case "local":
+                        if (File.Exists(backup.StoragePath))
+                        {
+                            File.Delete(backup.StoragePath);
+                            Console.WriteLine($"✅ Deleted local file: {backup.StoragePath}");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"⚠️ Local file not found: {backup.StoragePath}");
+                        }
+                        break;
+                        
+                    case "googledrive":
+                        await _googleDriveService.DeleteFileFromPathAsync(backup.StoragePath);
+                        break;
+                        
+                    case "remoteserver":
+                        var deleted = await FileHelper.DeleteFileAsync(backup.StoragePath);
+                        if (deleted)
+                        {
+                            Console.WriteLine($"✅ Deleted remote file: {backup.StoragePath}");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"⚠️ Remote file not found or delete failed: {backup.StoragePath}");
+                        }
+                        break;
+                        
+                    default:
+                        Console.WriteLine($"⚠️ Unknown storage type: {backup.StorageType}");
+                        break;
                 }
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error deleting file from storage: {ex.Message}");
+            }
+            
+            await _backupRepository.DeleteAsync(id);
+            
+            await _logRepository.AddAsync(new BackupLog
+            {
+                BackupId = id,
+                Action = "Delete",
+                Status = "Success",
+                Message = $"Backup deleted from {backup.StorageType}",
+                CreatedBy = userId,
+                CreatedAt = DateTime.UtcNow
+            });
             
             await _logRepository.SaveChangesAsync();
-        }
-
-        private async Task DeleteFromStorageAsync(Backup backup)
-        {
-            switch (backup.StorageType.ToLower())
-            {
-                case "local":
-                    if (File.Exists(backup.FilePath))
-                        File.Delete(backup.FilePath);
-                    break;
-                case "googledrive":
-                    await _googleDriveService.DeleteFileAsync(backup.StoragePath);
-                    break;
-                case "remoteserver":
-                    await FileHelper.DeleteFileAsync(backup.StoragePath);
-                    break;
-                default:
-                    throw new Exception($"Unsupported storage type: {backup.StorageType}");
-            }
+            Console.WriteLine($"✅ Backup record deleted from database");
         }
 
         public async Task<BackupDto?> GetBackupByIdAsync(long id)
@@ -582,35 +582,71 @@ namespace shop_back.src.Shared.Infrastructure.Services
             return (items.Select(MapToDto), totalCount, grandTotalCount);
         }
 
-        public async Task DeleteBackupAsync(long id, Guid? userId = null)
-        {
-            var backup = await _backupRepository.GetByIdAsync(id);
-            if (backup == null)
-                throw new Exception("Backup not found");
-
-            await DeleteFromStorageAsync(backup);
-            await _backupRepository.DeletePermanentlyAsync(id);
-            
-            await _logRepository.AddAsync(new BackupLog
-            {
-                BackupId = id,
-                Action = "Delete",
-                Status = "Success",
-                Message = "Backup permanently deleted",
-                CreatedBy = userId,
-                CreatedAt = DateTime.UtcNow
-            });
-            
-            await _logRepository.SaveChangesAsync();
-        }
-
         public async Task<string> DownloadBackupAsync(long id)
         {
             var backup = await _backupRepository.GetByIdAsync(id);
             if (backup == null)
                 throw new Exception("Backup not found");
 
-            return backup.FilePath;
+            Console.WriteLine($"📥 Downloading backup: {backup.Name} (ID: {id})");
+            Console.WriteLine($"📁 Storage Type: {backup.StorageType}");
+            Console.WriteLine($"📁 Storage Path: {backup.StoragePath}");
+
+            string tempFilePath = Path.Combine(Path.GetTempPath(), backup.FileName);
+            
+            try
+            {
+                switch (backup.StorageType.ToLower())
+                {
+                    case "local":
+                        if (File.Exists(backup.StoragePath))
+                        {
+                            Console.WriteLine($"✅ Local file found: {backup.StoragePath}");
+                            return backup.StoragePath;
+                        }
+                        else
+                        {
+                            throw new Exception("Local backup file not found");
+                        }
+                        
+                    case "googledrive":
+                        Console.WriteLine($"📥 Downloading from Google Drive: {backup.StoragePath}");
+                        await _googleDriveService.DownloadFileAsync(backup.StoragePath, tempFilePath);
+                        Console.WriteLine($"✅ Downloaded to: {tempFilePath}");
+                        return tempFilePath;
+                        
+                    case "remoteserver":
+                        Console.WriteLine($"📥 Downloading from Remote Server: {backup.StoragePath}");
+                        using (var client = new HttpClient())
+                        {
+                            var remoteUrl = backup.StoragePath;
+                            if (!remoteUrl.StartsWith("http"))
+                            {
+                                var baseUrl = _configuration["REMOTE_STORAGE_URL"] ?? "https://shopfiles.pigeonic.com";
+                                remoteUrl = $"{baseUrl}{remoteUrl}";
+                            }
+                            
+                            var response = await client.GetAsync(remoteUrl);
+                            if (!response.IsSuccessStatusCode)
+                            {
+                                throw new Exception($"Failed to download from remote server: {response.StatusCode}");
+                            }
+                            
+                            var bytes = await response.Content.ReadAsByteArrayAsync();
+                            await File.WriteAllBytesAsync(tempFilePath, bytes);
+                            Console.WriteLine($"✅ Downloaded to: {tempFilePath}");
+                            return tempFilePath;
+                        }
+                        
+                    default:
+                        throw new Exception($"Unsupported storage type: {backup.StorageType}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Download failed: {ex.Message}");
+                throw new Exception($"Failed to download backup: {ex.Message}");
+            }
         }
 
         public async Task RestoreBackupAsync(long id, Guid? userId = null)
@@ -696,6 +732,63 @@ namespace shop_back.src.Shared.Infrastructure.Services
         public async Task<BackupStatisticsDto> GetStatisticsAsync()
         {
             return await _backupRepository.GetStatisticsAsync();
+        }
+
+        public async Task CleanupOldBackupsAsync(int retentionDays, Guid? userId = null)
+        {
+            var oldBackups = await _backupRepository.GetOldBackupsAsync(retentionDays);
+            
+            foreach (var backup in oldBackups)
+            {
+                try
+                {
+                    await DeleteFromStorageAsync(backup);
+                    await _backupRepository.DeleteAsync(backup.Id);
+                    
+                    await _logRepository.AddAsync(new BackupLog
+                    {
+                        BackupId = backup.Id,
+                        Action = "Cleanup",
+                        Status = "Success",
+                        Message = $"Deleted backup older than {retentionDays} days",
+                        CreatedBy = userId,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+                catch (Exception ex)
+                {
+                    await _logRepository.AddAsync(new BackupLog
+                    {
+                        BackupId = backup.Id,
+                        Action = "Cleanup",
+                        Status = "Failed",
+                        Message = $"Failed to delete backup: {ex.Message}",
+                        CreatedBy = userId,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+            
+            await _logRepository.SaveChangesAsync();
+        }
+
+        private async Task DeleteFromStorageAsync(Backup backup)
+        {
+            switch (backup.StorageType.ToLower())
+            {
+                case "local":
+                    if (File.Exists(backup.FilePath))
+                        File.Delete(backup.FilePath);
+                    break;
+                case "googledrive":
+                    await _googleDriveService.DeleteFileAsync(backup.StoragePath);
+                    break;
+                case "remoteserver":
+                    await FileHelper.DeleteFileAsync(backup.StoragePath);
+                    break;
+                default:
+                    throw new Exception($"Unsupported storage type: {backup.StorageType}");
+            }
         }
 
         // Schedule management methods
@@ -870,8 +963,11 @@ namespace shop_back.src.Shared.Infrastructure.Services
         }
 
         // Mapping methods
-        private BackupDto MapToDto(Backup backup)
+        private BackupDto MapToDto(Backup? backup)
         {
+            if (backup == null)
+                return new BackupDto();
+                
             return new BackupDto
             {
                 Id = backup.Id,
