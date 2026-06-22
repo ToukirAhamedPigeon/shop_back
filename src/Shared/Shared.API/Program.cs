@@ -17,30 +17,41 @@ using shop_back.src.Shared.Infrastructure.Helpers;
 // Load .env file at the very beginning
 try
 {
-    var envPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"));
-    if (File.Exists(envPath))
+    // Try multiple possible locations for .env
+    var possiblePaths = new[]
     {
-        Env.Load(envPath);
-        Console.WriteLine($"✅ Loaded .env from: {envPath}");
+        Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env")),
+        Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+        Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", ".env")),
+        Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", ".env")),
+    };
+
+    var loaded = false;
+    foreach (var envPath in possiblePaths)
+    {
+        if (File.Exists(envPath))
+        {
+            Env.Load(envPath);
+            Console.WriteLine($"✅ Loaded .env from: {envPath}");
+            loaded = true;
+            break;
+        }
     }
-    else
+
+    if (!loaded)
     {
-        // Try current directory
-        var currentEnvPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
-        if (File.Exists(currentEnvPath))
+        Console.WriteLine($"⚠️ .env file not found in any of these locations:");
+        foreach (var path in possiblePaths)
         {
-            Env.Load(currentEnvPath);
-            Console.WriteLine($"✅ Loaded .env from: {currentEnvPath}");
+            Console.WriteLine($"   - {path}");
         }
-        else
-        {
-            Console.WriteLine($"⚠️ .env file not found at: {envPath} or {currentEnvPath}");
-        }
+        Console.WriteLine("   Using environment variables or defaults.");
     }
 }
 catch (Exception ex)
 {
     Console.WriteLine($"❌ Failed to load .env: {ex.Message}");
+    Console.WriteLine("   Continuing with environment variables or defaults.");
 }
 
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
@@ -48,8 +59,20 @@ JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 var builder = WebApplication.CreateBuilder(args);
 
 // ------------------- LOAD .ENV AGAIN FOR SAFETY -------------------
-var envPathAgain = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"));
-try { Env.Load(envPathAgain); } catch { }
+// Load .env into configuration
+try
+{
+    var envPathAgain = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"));
+    if (File.Exists(envPathAgain))
+    {
+        Env.Load(envPathAgain);
+        Console.WriteLine($"✅ Reloaded .env from: {envPathAgain}");
+    }
+}
+catch { }
+
+// Add environment variables to configuration
+builder.Configuration.AddEnvironmentVariables();
 
 // ------------------- FILE UPLOAD SIZE LIMITS -------------------
 builder.Services.Configure<FormOptions>(options =>
@@ -66,15 +89,53 @@ builder.WebHost.ConfigureKestrel(serverOptions =>
 
 // ------------------- DATABASE -------------------
 var connStr = Env.GetString("DefaultConnection");
-Console.WriteLine($"🔗 Database Connection String: {(string.IsNullOrEmpty(connStr) ? "NOT FOUND!" : "Loaded")}");
+if (string.IsNullOrEmpty(connStr))
+{
+    connStr = builder.Configuration.GetConnectionString("DefaultConnection") 
+              ?? builder.Configuration["DefaultConnection"];
+}
+
+if (string.IsNullOrEmpty(connStr))
+{
+    Console.WriteLine($"❌ ERROR: DefaultConnection is not set!");
+    Console.WriteLine("   Please ensure .env file contains: DefaultConnection=your-connection-string");
+}
+else
+{
+    // Log connection string (mask sensitive data)
+    var logConn = connStr;
+    if (logConn.Contains("Password="))
+    {
+        var passwordMatch = System.Text.RegularExpressions.Regex.Match(logConn, @"Password=([^;]+)");
+        if (passwordMatch.Success)
+        {
+            logConn = logConn.Replace(passwordMatch.Value, "Password=*****");
+        }
+    }
+    Console.WriteLine($"🔗 Database Connection String: {logConn}");
+}
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connStr));
 
 // ------------------- REDIS -------------------
 var redisConn = Env.GetString("RedisConnectionString");
-var multiplexer = ConnectionMultiplexer.Connect(redisConn);
-builder.Services.AddSingleton<IConnectionMultiplexer>(multiplexer);
+if (string.IsNullOrEmpty(redisConn))
+{
+    redisConn = builder.Configuration["RedisConnectionString"] ?? "localhost:6379";
+}
+Console.WriteLine($"🔗 Redis Connection: {(string.IsNullOrEmpty(redisConn) ? "NOT FOUND!" : redisConn)}");
+
+try
+{
+    var multiplexer = ConnectionMultiplexer.Connect(redisConn);
+    builder.Services.AddSingleton<IConnectionMultiplexer>(multiplexer);
+    Console.WriteLine("✅ Redis connected successfully");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"❌ Redis connection failed: {ex.Message}");
+}
 
 // ------------------- HTTP CLIENT FOR REMOTE STORAGE -------------------
 builder.Services.AddHttpClient();
@@ -85,18 +146,81 @@ builder.Services.AddRepositories();
 builder.Services.AddServices();
 
 // ------------------- FILE STORAGE HELPERS -------------------
+var fileStorageType = Env.GetString("FILE_STORAGE_TYPE") ?? builder.Configuration["FILE_STORAGE_TYPE"] ?? "remote";
+var remoteStorageUrl = Env.GetString("REMOTE_STORAGE_URL") ?? builder.Configuration["REMOTE_STORAGE_URL"] ?? "https://shopfiles.pigeonic.com";
+var remoteStorageToken = Env.GetString("REMOTE_STORAGE_TOKEN") ?? builder.Configuration["REMOTE_STORAGE_TOKEN"] ?? "";
+
 builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
 {
-    ["FILE_STORAGE_TYPE"] = Env.GetString("FILE_STORAGE_TYPE") ?? "remote",
-    ["REMOTE_STORAGE_URL"] = Env.GetString("REMOTE_STORAGE_URL") ?? "https://shopfiles.pigeonic.com",
-    ["REMOTE_STORAGE_TOKEN"] = Env.GetString("REMOTE_STORAGE_TOKEN") ?? ""
+    ["FILE_STORAGE_TYPE"] = fileStorageType,
+    ["REMOTE_STORAGE_URL"] = remoteStorageUrl,
+    ["REMOTE_STORAGE_TOKEN"] = remoteStorageToken
 });
 
-Console.WriteLine($"FILE_STORAGE_TYPE: {builder.Configuration["FILE_STORAGE_TYPE"]}");
+Console.WriteLine($"=== CONFIGURATION CHECK ===");
+Console.WriteLine($"FILE_STORAGE_TYPE: '{fileStorageType}'");
+Console.WriteLine($"REMOTE_STORAGE_URL: '{remoteStorageUrl}'");
+Console.WriteLine($"REMOTE_STORAGE_TOKEN: {(string.IsNullOrEmpty(remoteStorageToken) ? "NOT SET" : "SET ✓")}");
+
+// Register RemoteFileHelper
 builder.Services.AddSingleton<RemoteFileHelper>();
 
+// ------------------- GOOGLE DRIVE CREDENTIALS PATH -------------------
+// Ensure the credentials path is set correctly
+var googleDriveCredentialsPath = Env.GetString("GOOGLE_DRIVE_CREDENTIALS_PATH") 
+    ?? builder.Configuration["GOOGLE_DRIVE_CREDENTIALS_PATH"] 
+    ?? "credentials.json";
+
+// If it's a relative path, make it absolute relative to the API project
+if (!Path.IsPathRooted(googleDriveCredentialsPath))
+{
+    var apiProjectPath = Directory.GetCurrentDirectory();
+    var possibleCredentialPaths = new[]
+    {
+        Path.Combine(apiProjectPath, googleDriveCredentialsPath),
+        Path.Combine(apiProjectPath, "src", "Shared", "Shared.API", googleDriveCredentialsPath),
+        Path.Combine(apiProjectPath, "credentials.json"),
+        Path.Combine(apiProjectPath, "src", "Shared", "Shared.API", "credentials.json"),
+        Path.Combine(Directory.GetParent(apiProjectPath)?.FullName ?? "", "Shared", "Shared.API", googleDriveCredentialsPath),
+    };
+
+    foreach (var path in possibleCredentialPaths)
+    {
+        if (File.Exists(path))
+        {
+            googleDriveCredentialsPath = path;
+            Console.WriteLine($"✅ Found Google Drive credentials at: {path}");
+            break;
+        }
+    }
+}
+
+// Add to configuration
+builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+{
+    ["GOOGLE_DRIVE_CREDENTIALS_PATH"] = googleDriveCredentialsPath,
+    ["GOOGLE_DRIVE_BACKUP_FOLDER_ID"] = Env.GetString("GOOGLE_DRIVE_BACKUP_FOLDER_ID") 
+        ?? builder.Configuration["GOOGLE_DRIVE_BACKUP_FOLDER_ID"] 
+        ?? ""
+});
+
+Console.WriteLine($"📁 Google Drive Credentials Path: {googleDriveCredentialsPath}");
+Console.WriteLine($"📁 Google Drive Folder ID: {builder.Configuration["GOOGLE_DRIVE_BACKUP_FOLDER_ID"]}");
+
 // ------------------- JWT AUTHENTICATION -------------------
-var key = Encoding.UTF8.GetBytes(Env.GetString("JwtKey")!);
+var jwtKey = Env.GetString("JwtKey") ?? builder.Configuration["JwtKey"];
+if (string.IsNullOrEmpty(jwtKey))
+{
+    Console.WriteLine($"❌ ERROR: JwtKey is not set!");
+    Console.WriteLine("   Please ensure .env file contains: JwtKey=your-secret-key");
+    // Set a default for development (not secure for production!)
+    jwtKey = "dev-secret-key-do-not-use-in-production-1234567890";
+}
+
+var jwtIssuer = Env.GetString("JwtIssuer") ?? builder.Configuration["JwtIssuer"] ?? "shopsphere";
+var jwtAudience = Env.GetString("JwtAudience") ?? builder.Configuration["JwtAudience"] ?? "shopsphere";
+
+var key = Encoding.UTF8.GetBytes(jwtKey);
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -110,8 +234,8 @@ builder.Services
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = Env.GetString("JwtIssuer"),
-            ValidAudience = Env.GetString("JwtAudience"),
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(key),
         };
     });
@@ -158,18 +282,20 @@ builder.Services.AddCors(p =>
     });
 });
 
-var fileStorageType = builder.Configuration["FILE_STORAGE_TYPE"];
-var remoteUrl = builder.Configuration["REMOTE_STORAGE_URL"];
-Console.WriteLine($"=== CONFIGURATION CHECK ===");
-Console.WriteLine($"FILE_STORAGE_TYPE from config: '{fileStorageType}'");
-Console.WriteLine($"REMOTE_STORAGE_URL from config: '{remoteUrl}'");
-
 var app = builder.Build();
 
 // ------------------- INITIALIZE FILE HELPER -------------------
-var remoteFileHelper = app.Services.GetRequiredService<RemoteFileHelper>();
-var webHostEnvironment = app.Services.GetRequiredService<IWebHostEnvironment>();
-FileHelper.Initialize(remoteFileHelper, webHostEnvironment);
+try
+{
+    var remoteFileHelper = app.Services.GetRequiredService<RemoteFileHelper>();
+    var webHostEnvironment = app.Services.GetRequiredService<IWebHostEnvironment>();
+    FileHelper.Initialize(remoteFileHelper, webHostEnvironment);
+    Console.WriteLine("✅ FileHelper initialized successfully");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"❌ Failed to initialize FileHelper: {ex.Message}");
+}
 
 #if !DEBUG
 app.UseHttpsRedirection();
@@ -188,4 +314,14 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.MapControllers();
+
+// ------------------- LOG STARTUP CONFIGURATION -------------------
+Console.WriteLine("=== SERVER STARTUP COMPLETE ===");
+Console.WriteLine($"Environment: {(builder.Environment.IsDevelopment() ? "Development" : "Production")}");
+Console.WriteLine($"Google Drive Credentials Path: {builder.Configuration["GOOGLE_DRIVE_CREDENTIALS_PATH"]}");
+Console.WriteLine($"Google Drive Folder ID: {builder.Configuration["GOOGLE_DRIVE_BACKUP_FOLDER_ID"]}");
+Console.WriteLine($"File Storage Type: {builder.Configuration["FILE_STORAGE_TYPE"]}");
+Console.WriteLine($"Remote Storage URL: {builder.Configuration["REMOTE_STORAGE_URL"]}");
+Console.WriteLine("==================================");
+
 app.Run();

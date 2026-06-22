@@ -408,7 +408,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
             try
             {
                 Console.WriteLine($"📤 Uploading to {destination.Type}: {destination.Name}");
-                Console.WriteLine($"📤 Destination Config: {JsonSerializer.Serialize(destination.Config)}");
                 Console.WriteLine($"📤 File: {filePath}, Size: {new FileInfo(filePath).Length} bytes");
                 Console.WriteLine($"📤 Target file name: {fileName}");
                 
@@ -422,6 +421,13 @@ namespace shop_back.src.Shared.Infrastructure.Services
                         Console.WriteLine($"📤 Uploading to Google Drive...");
                         try
                         {
+                            // Make sure the file exists
+                            if (!File.Exists(filePath))
+                            {
+                                throw new Exception($"File not found: {filePath}");
+                            }
+                            
+                            // Upload the file
                             var driveResult = await _googleDriveService.UploadFileAsync(filePath, fileName, "backups");
                             Console.WriteLine($"✅ Uploaded to Google Drive: {driveResult}");
                             return driveResult;
@@ -429,6 +435,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
                         catch (Exception ex)
                         {
                             Console.WriteLine($"❌ Google Drive upload failed: {ex.Message}");
+                            Console.WriteLine($"   Stack trace: {ex.StackTrace}");
                             throw;
                         }
                         
@@ -606,19 +613,52 @@ namespace shop_back.src.Shared.Infrastructure.Services
                         }
                         else
                         {
+                            // Try the FilePath as fallback
+                            if (File.Exists(backup.FilePath))
+                            {
+                                Console.WriteLine($"✅ Local file found at FilePath: {backup.FilePath}");
+                                return backup.FilePath;
+                            }
                             throw new Exception("Local backup file not found");
                         }
                         
                     case "googledrive":
-                        Console.WriteLine($"📥 Downloading from Google Drive: {backup.StoragePath}");
-                        await _googleDriveService.DownloadFileAsync(backup.StoragePath, tempFilePath);
-                        Console.WriteLine($"✅ Downloaded to: {tempFilePath}");
-                        return tempFilePath;
+                        Console.WriteLine($"📥 Downloading from Google Drive...");
+                        Console.WriteLine($"   File ID: {backup.StoragePath}");
+                        
+                        try
+                        {
+                            // Ensure temp directory exists
+                            var tempDir = Path.GetDirectoryName(tempFilePath);
+                            if (!string.IsNullOrEmpty(tempDir))
+                            {
+                                Directory.CreateDirectory(tempDir);
+                            }
+                            
+                            await _googleDriveService.DownloadFileAsync(backup.StoragePath, tempFilePath);
+                            
+                            if (File.Exists(tempFilePath))
+                            {
+                                Console.WriteLine($"✅ Downloaded to: {tempFilePath} (Size: {new FileInfo(tempFilePath).Length} bytes)");
+                                return tempFilePath;
+                            }
+                            else
+                            {
+                                throw new Exception("Download completed but file not found");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"❌ Google Drive download failed: {ex.Message}");
+                            throw new Exception($"Failed to download from Google Drive: {ex.Message}");
+                        }
                         
                     case "remoteserver":
                         Console.WriteLine($"📥 Downloading from Remote Server: {backup.StoragePath}");
                         using (var client = new HttpClient())
                         {
+                            client.Timeout = TimeSpan.FromMinutes(5);
+                            
                             var remoteUrl = backup.StoragePath;
                             if (!remoteUrl.StartsWith("http"))
                             {
@@ -626,15 +666,25 @@ namespace shop_back.src.Shared.Infrastructure.Services
                                 remoteUrl = $"{baseUrl}{remoteUrl}";
                             }
                             
+                            Console.WriteLine($"   URL: {remoteUrl}");
+                            
                             var response = await client.GetAsync(remoteUrl);
                             if (!response.IsSuccessStatusCode)
                             {
-                                throw new Exception($"Failed to download from remote server: {response.StatusCode}");
+                                throw new Exception($"Failed to download from remote server: {response.StatusCode} - {response.ReasonPhrase}");
                             }
                             
                             var bytes = await response.Content.ReadAsByteArrayAsync();
+                            
+                            // Ensure temp directory exists
+                            var tempDir = Path.GetDirectoryName(tempFilePath);
+                            if (!string.IsNullOrEmpty(tempDir))
+                            {
+                                Directory.CreateDirectory(tempDir);
+                            }
+                            
                             await File.WriteAllBytesAsync(tempFilePath, bytes);
-                            Console.WriteLine($"✅ Downloaded to: {tempFilePath}");
+                            Console.WriteLine($"✅ Downloaded to: {tempFilePath} (Size: {bytes.Length} bytes)");
                             return tempFilePath;
                         }
                         
