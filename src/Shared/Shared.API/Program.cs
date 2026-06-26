@@ -166,33 +166,33 @@ Console.WriteLine($"REMOTE_STORAGE_TOKEN: {(string.IsNullOrEmpty(remoteStorageTo
 builder.Services.AddSingleton<RemoteFileHelper>();
 
 // ------------------- GOOGLE DRIVE CREDENTIALS PATH -------------------
-// Ensure the credentials path is set correctly
 var googleDriveCredentialsPath = Env.GetString("GOOGLE_DRIVE_CREDENTIALS_PATH") 
     ?? builder.Configuration["GOOGLE_DRIVE_CREDENTIALS_PATH"] 
-    ?? "credentials.json";
+    ?? "oauth-credentials.json"; // default to OAuth2 file
 
-// If it's a relative path, make it absolute relative to the API project
+// Resolve relative path if needed
 if (!Path.IsPathRooted(googleDriveCredentialsPath))
 {
     var apiProjectPath = Directory.GetCurrentDirectory();
-    var possibleCredentialPaths = new[]
+    var resolvedPath = Path.Combine(apiProjectPath, googleDriveCredentialsPath);
+    if (File.Exists(resolvedPath))
     {
-        Path.Combine(apiProjectPath, googleDriveCredentialsPath),
-        Path.Combine(apiProjectPath, "src", "Shared", "Shared.API", googleDriveCredentialsPath),
-        Path.Combine(apiProjectPath, "credentials.json"),
-        Path.Combine(apiProjectPath, "src", "Shared", "Shared.API", "credentials.json"),
-        Path.Combine(Directory.GetParent(apiProjectPath)?.FullName ?? "", "Shared", "Shared.API", googleDriveCredentialsPath),
-    };
-
-    foreach (var path in possibleCredentialPaths)
-    {
-        if (File.Exists(path))
-        {
-            googleDriveCredentialsPath = path;
-            Console.WriteLine($"✅ Found Google Drive credentials at: {path}");
-            break;
-        }
+        googleDriveCredentialsPath = resolvedPath;
+        Console.WriteLine($"✅ Found Google Drive credentials at: {resolvedPath}");
     }
+    else
+    {
+        // Use the resolved path even if not found (the service will handle it)
+        googleDriveCredentialsPath = resolvedPath;
+        Console.WriteLine($"⚠️ Google Drive credentials not found at: {resolvedPath}, will attempt to use this path.");
+    }
+}
+else
+{
+    if (File.Exists(googleDriveCredentialsPath))
+        Console.WriteLine($"✅ Found Google Drive credentials at: {googleDriveCredentialsPath}");
+    else
+        Console.WriteLine($"⚠️ Google Drive credentials not found at: {googleDriveCredentialsPath}");
 }
 
 // Add to configuration

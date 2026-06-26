@@ -3,6 +3,7 @@ using Google.Apis.Auth.OAuth2;
 using Google.Apis.Drive.v3;
 using Google.Apis.Drive.v3.Data;
 using Google.Apis.Services;
+using Google.Apis.Util.Store;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using System;
@@ -17,33 +18,28 @@ namespace shop_back.src.Shared.Application.Services
 {
     public class GoogleDriveService : IGoogleDriveService
     {
-        private readonly DriveService? _driveService;
+        private DriveService? _driveService;
         private string? _backupFolderId;
         private readonly bool _isConfigured;
         private readonly IHostEnvironment _environment;
+        private readonly IConfiguration _configuration;
 
         public GoogleDriveService(IConfiguration configuration, IHostEnvironment environment)
         {
             _environment = environment;
-            
-            // Try multiple possible locations for credentials.json
+            _configuration = configuration;
+
+            var credentialsType = configuration["GOOGLE_DRIVE_CREDENTIALS_TYPE"] ?? "serviceaccount";
             var credentialsPath = configuration["GOOGLE_DRIVE_CREDENTIALS_PATH"] ?? "credentials.json";
-            
-            // Check if the path is relative, if so look in multiple locations
+
             if (!Path.IsPathRooted(credentialsPath))
             {
                 var possiblePaths = new List<string>
                 {
-                    // Current directory (usually the API project)
                     Path.Combine(Directory.GetCurrentDirectory(), credentialsPath),
-                    // Shared.API folder
                     Path.Combine(Directory.GetCurrentDirectory(), "src", "Shared", "Shared.API", credentialsPath),
-                    // Content root
                     Path.Combine(_environment.ContentRootPath, credentialsPath),
-                    // Web root
-                    Path.Combine(_environment.ContentRootPath, "wwwroot", credentialsPath),
                 };
-                
                 foreach (var path in possiblePaths)
                 {
                     if (System.IO.File.Exists(path))
@@ -54,51 +50,41 @@ namespace shop_back.src.Shared.Application.Services
                     }
                 }
             }
-            
+
             _backupFolderId = configuration["GOOGLE_DRIVE_BACKUP_FOLDER_ID"];
-            
+
             Console.WriteLine($"📁 Google Drive Config:");
+            Console.WriteLine($"  Credentials Type: {credentialsType}");
             Console.WriteLine($"  Credentials Path: {credentialsPath}");
             Console.WriteLine($"  Folder ID: {_backupFolderId}");
-            Console.WriteLine($"  File exists: {System.IO.File.Exists(credentialsPath)}");
-            
+
             try
             {
-                if (System.IO.File.Exists(credentialsPath))
+                if (!System.IO.File.Exists(credentialsPath))
                 {
-                    Console.WriteLine($"📄 Reading credentials from: {credentialsPath}");
-                    #pragma warning disable CS0618 // Disable obsolete warning for GoogleCredential.FromStream
-                    // Use the recommended approach with CredentialFactory
-                    using var stream = new FileStream(credentialsPath, FileMode.Open, FileAccess.Read);
-                    
-                    // Load credentials using the recommended method (synchronous)
-                    // This avoids the async constructor issue
-                    var credential = GoogleCredential.FromStream(stream);
-                    
-                    // Check if it's a service account or OAuth2
-                    if (credential.UnderlyingCredential is ServiceAccountCredential)
-                    {
-                        Console.WriteLine("🔐 Using Service Account credentials");
-                        // Service accounts need Drive scope
-                        credential = credential.CreateScoped(DriveService.ScopeConstants.Drive);
-                    }
-                    else
-                    {
-                        Console.WriteLine("🔐 Using OAuth2 credentials");
-                        credential = credential.CreateScoped(DriveService.ScopeConstants.Drive);
-                    }
+                    Console.WriteLine($"❌ Credentials file not found: {credentialsPath}");
+                    _isConfigured = false;
+                    return;
+                }
 
-                    _driveService = new DriveService(new BaseClientService.Initializer
-                    {
-                        HttpClientInitializer = credential,
-                        ApplicationName = "ShopSphere Backup",
-                    });
-                    
+                if (credentialsType.Equals("oauth2", StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.WriteLine("🔐 Using OAuth2 with user authorization (personal account)");
+                    InitializeOAuth2(credentialsPath);
+                }
+                else
+                {
+                    Console.WriteLine("🔐 Using Service Account credentials");
+                    InitializeServiceAccount(credentialsPath);
+                }
+
+                if (_driveService != null)
+                {
                     _isConfigured = true;
-                    Console.WriteLine("✅ Google Drive Service configured successfully");
-                    
-                    // Test the connection in background (don't await in constructor)
-                    _ = Task.Run(async () => {
+                    Console.WriteLine("✅ Google Drive Service configured successfully.");
+
+                    _ = Task.Run(async () =>
+                    {
                         try
                         {
                             var testResult = await TestConnectionAsync();
@@ -112,18 +98,67 @@ namespace shop_back.src.Shared.Application.Services
                 }
                 else
                 {
-                    Console.WriteLine($"❌ Google Drive credentials not found at: {credentialsPath}");
-                    Console.WriteLine("   Please ensure credentials.json is in the Shared.API folder");
                     _isConfigured = false;
+                    Console.WriteLine("❌ DriveService could not be initialized.");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Failed to initialize Google Drive Service: {ex.Message}");
-                Console.WriteLine($"   Stack trace: {ex.StackTrace}");
+                Console.WriteLine($"❌ Failed to initialize Google Drive: {ex.Message}");
                 _isConfigured = false;
             }
         }
+
+        private void InitializeOAuth2(string credentialsPath)
+        {
+            try
+            {
+                using var stream = new FileStream(credentialsPath, FileMode.Open, FileAccess.Read);
+                var clientSecrets = GoogleClientSecrets.FromStream(stream).Secrets;
+
+                var credential = GoogleWebAuthorizationBroker.AuthorizeAsync(
+                    clientSecrets,
+                    new[] { DriveService.ScopeConstants.Drive },
+                    "shopsphere_user",
+                    CancellationToken.None,
+                    new FileDataStore("GoogleDriveToken", true)
+                ).Result;
+
+                _driveService = new DriveService(new BaseClientService.Initializer
+                {
+                    HttpClientInitializer = credential,
+                    ApplicationName = "ShopSphere Backup"
+                });
+            }
+            catch (AggregateException ae)
+            {
+                var inner = ae.InnerException ?? ae;
+                throw new Exception($"OAuth2 authorization failed: {inner.Message}");
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"OAuth2 initialization failed: {ex.Message}");
+            }
+        }
+
+        private void InitializeServiceAccount(string credentialsPath)
+        {
+#pragma warning disable CS0618 // Obsolete, but still works for now
+            using var stream = new FileStream(credentialsPath, FileMode.Open, FileAccess.Read);
+            var credential = GoogleCredential.FromStream(stream)
+                .CreateScoped(DriveService.ScopeConstants.Drive);
+#pragma warning restore CS0618
+
+            _driveService = new DriveService(new BaseClientService.Initializer
+            {
+                HttpClientInitializer = credential,
+                ApplicationName = "ShopSphere Backup"
+            });
+        }
+
+        // -----------------------------------------------------------------
+        // Public methods
+        // -----------------------------------------------------------------
 
         public async Task<string> UploadFileAsync(string filePath, string fileName, string folder)
         {
@@ -137,7 +172,6 @@ namespace shop_back.src.Shared.Application.Services
                 Console.WriteLine($"  FileName: {fileName}");
                 Console.WriteLine($"  Folder ID: {_backupFolderId}");
 
-                // Check if folder exists and is accessible
                 if (!string.IsNullOrEmpty(_backupFolderId))
                 {
                     var folderCheck = await GetFolderAsync(_backupFolderId);
@@ -182,8 +216,8 @@ namespace shop_back.src.Shared.Application.Services
                 var fileMetadata = new DriveFile
                 {
                     Name = fileName,
-                    Parents = !string.IsNullOrEmpty(_backupFolderId) 
-                        ? new List<string> { _backupFolderId } 
+                    Parents = !string.IsNullOrEmpty(_backupFolderId)
+                        ? new List<string> { _backupFolderId }
                         : null
                 };
 
@@ -191,7 +225,7 @@ namespace shop_back.src.Shared.Application.Services
                 request.Fields = "id, webContentLink, name";
 
                 var result = await request.UploadAsync();
-                
+
                 if (result.Status != Google.Apis.Upload.UploadStatus.Completed)
                 {
                     Console.WriteLine($"❌ Upload status: {result.Status}");
@@ -201,10 +235,10 @@ namespace shop_back.src.Shared.Application.Services
 
                 var fileId = request.ResponseBody?.Id ?? string.Empty;
                 var webLink = request.ResponseBody?.WebContentLink ?? string.Empty;
-                
+
                 Console.WriteLine($"✅ Uploaded to Google Drive: {fileName} (ID: {fileId})");
                 Console.WriteLine($"   Web link: {webLink}");
-                
+
                 return fileId;
             }
             catch (Exception ex)
@@ -229,7 +263,6 @@ namespace shop_back.src.Shared.Application.Services
             catch (Exception ex)
             {
                 Console.WriteLine($"❌ Failed to delete file from Google Drive: {ex.Message}");
-                // Don't throw, just log - the backup record will still be soft-deleted
             }
         }
 
@@ -244,25 +277,22 @@ namespace shop_back.src.Shared.Application.Services
             try
             {
                 Console.WriteLine($"🗑️ Deleting Google Drive file from path: {filePath}");
-                
-                // If it's a file ID (no slashes, no dots, longer than 5 chars)
+
                 if (filePath.Length > 5 && !filePath.Contains("/") && !filePath.Contains(".") && !filePath.Contains("\\"))
                 {
                     await DeleteFileAsync(filePath);
                     return;
                 }
-                
-                // Extract filename from path
+
                 var fileName = System.IO.Path.GetFileName(filePath);
                 if (string.IsNullOrEmpty(fileName))
                 {
                     Console.WriteLine($"⚠️ Could not extract filename from: {filePath}");
                     return;
                 }
-                
+
                 Console.WriteLine($"🔍 Searching for file: {fileName}");
-                
-                // Search for the file
+
                 var request = _driveService.Files.List();
                 request.Q = $"name='{fileName}' and trashed=false";
                 if (!string.IsNullOrEmpty(_backupFolderId))
@@ -271,16 +301,16 @@ namespace shop_back.src.Shared.Application.Services
                 }
                 request.Fields = "files(id, name, parents)";
                 request.PageSize = 10;
-                
+
                 var result = await request.ExecuteAsync();
-                
+
                 if (result.Files != null && result.Files.Any())
                 {
                     foreach (var file in result.Files)
                     {
                         if (file != null && !string.IsNullOrEmpty(file.Id))
                         {
-                            Console.WriteLine($"   Found file: {file.Name} (ID: {file.Id})");
+                            Console.WriteLine($"   Found file: {file.Name ?? "unknown"} (ID: {file.Id})");
                             await DeleteFileAsync(file.Id);
                         }
                     }
@@ -288,20 +318,19 @@ namespace shop_back.src.Shared.Application.Services
                 else
                 {
                     Console.WriteLine($"⚠️ File not found in Google Drive: {fileName}");
-                    
-                    // Try search without folder restriction
+
                     var fallbackRequest = _driveService.Files.List();
                     fallbackRequest.Q = $"name='{fileName}' and trashed=false";
                     fallbackRequest.Fields = "files(id, name, parents)";
                     var fallbackResult = await fallbackRequest.ExecuteAsync();
-                    
+
                     if (fallbackResult.Files != null && fallbackResult.Files.Any())
                     {
                         foreach (var file in fallbackResult.Files)
                         {
                             if (file != null && !string.IsNullOrEmpty(file.Id))
                             {
-                                Console.WriteLine($"   Found file (no folder restriction): {file.Name} (ID: {file.Id})");
+                                Console.WriteLine($"   Found file (no folder restriction): {file.Name ?? "unknown"} (ID: {file.Id})");
                                 await DeleteFileAsync(file.Id);
                             }
                         }
@@ -311,7 +340,6 @@ namespace shop_back.src.Shared.Application.Services
             catch (Exception ex)
             {
                 Console.WriteLine($"❌ Failed to delete file from Google Drive: {ex.Message}");
-                // Don't throw, just log
             }
         }
 
@@ -323,11 +351,11 @@ namespace shop_back.src.Shared.Application.Services
             try
             {
                 Console.WriteLine($"📥 Downloading from Google Drive: {fileId}");
-                
+
                 var request = _driveService.Files.Get(fileId);
                 using var stream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write);
                 var result = await request.DownloadAsync(stream);
-                
+
                 if (result.Status == Google.Apis.Download.DownloadStatus.Completed)
                 {
                     Console.WriteLine($"✅ Downloaded Google Drive file: {fileId} to {destinationPath}");
@@ -354,17 +382,15 @@ namespace shop_back.src.Shared.Application.Services
             try
             {
                 Console.WriteLine("🔍 Testing Google Drive connection...");
-                
-                // Try to list files
+
                 var request = _driveService.Files.List();
                 request.PageSize = 1;
                 request.Fields = "files(id, name)";
                 var result = await request.ExecuteAsync();
-                
+
                 Console.WriteLine($"✅ Google Drive connection successful!");
                 Console.WriteLine($"   Files found: {result.Files?.Count ?? 0}");
-                
-                // Test folder access if folder ID is set
+
                 if (!string.IsNullOrEmpty(_backupFolderId))
                 {
                     try
@@ -372,7 +398,7 @@ namespace shop_back.src.Shared.Application.Services
                         var folder = await GetFolderAsync(_backupFolderId);
                         if (folder != null)
                         {
-                            Console.WriteLine($"✅ Folder accessible: {folder.Name} (ID: {folder.Id})");
+                            Console.WriteLine($"✅ Folder accessible: {folder.Name ?? "unknown"} (ID: {folder.Id ?? "unknown"})");
                         }
                         else
                         {
@@ -386,7 +412,7 @@ namespace shop_back.src.Shared.Application.Services
                         return false;
                     }
                 }
-                
+
                 return true;
             }
             catch (Exception ex)
@@ -405,21 +431,21 @@ namespace shop_back.src.Shared.Application.Services
             {
                 var cutoffDate = DateTime.UtcNow.AddDays(-retentionDays);
                 Console.WriteLine($"🧹 Cleaning up Google Drive files older than {retentionDays} days...");
-                
+
                 var query = $"createdTime < '{cutoffDate:yyyy-MM-ddTHH:mm:ss.fffZ}' and trashed=false";
                 if (!string.IsNullOrEmpty(_backupFolderId))
                 {
                     query += $" and '{_backupFolderId}' in parents";
                 }
-                
+
                 var request = _driveService.Files.List();
                 request.Q = query;
                 request.Fields = "files(id, name, createdTime)";
                 request.PageSize = 100;
-                
+
                 var result = await request.ExecuteAsync();
                 var deletedCount = 0;
-                
+
                 if (result.Files != null)
                 {
                     foreach (var file in result.Files)
@@ -430,18 +456,21 @@ namespace shop_back.src.Shared.Application.Services
                             {
                                 await DeleteFileAsync(file.Id);
                                 deletedCount++;
-                                // Use CreatedTimeDateTimeOffset if available, otherwise use CreatedTime
-                                var createdTime = file.CreatedTimeDateTimeOffset ?? file.CreatedTime;
-                                Console.WriteLine($"🗑️ Deleted old file: {file.Name} (Created: {createdTime})");
+
+                                // Use GetValueOrDefault to avoid CS8602
+                                var createdTime = file.CreatedTimeDateTimeOffset.GetValueOrDefault(DateTimeOffset.MinValue);
+                                var fileName = file.Name ?? "unknown";
+                                Console.WriteLine($"🗑️ Deleted old file: {fileName} (Created: {createdTime})");
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"❌ Failed to delete {file.Name}: {ex.Message}");
+                                var fileName = file?.Name ?? "unknown";
+                                Console.WriteLine($"❌ Failed to delete {fileName}: {ex.Message}");
                             }
                         }
                     }
                 }
-                
+
                 Console.WriteLine($"✅ Cleanup complete: {deletedCount} files deleted");
             }
             catch (Exception ex)
@@ -455,8 +484,7 @@ namespace shop_back.src.Shared.Application.Services
         {
             try
             {
-                #pragma warning disable CS8602 // Disable obsolete warning for GoogleCredential.FromStream
-                var request = _driveService.Files.Get(folderId);
+                var request = _driveService?.Files?.Get(folderId) ?? throw new ArgumentNullException(nameof(folderId));
                 request.Fields = "id, name, mimeType";
                 var folder = await request.ExecuteAsync();
                 return folder;
@@ -476,13 +504,13 @@ namespace shop_back.src.Shared.Application.Services
                     Name = folderName,
                     MimeType = "application/vnd.google-apps.folder"
                 };
-                #pragma warning disable CS8602 // Disable obsolete warning for GoogleCredential.FromStream
-                var request = _driveService.Files.Create(folderMetadata);
+
+                var request = _driveService?.Files?.Create(folderMetadata) ?? throw new ArgumentNullException(nameof(folderMetadata));
                 request.Fields = "id";
                 var result = await request.ExecuteAsync();
-                
-                Console.WriteLine($"✅ Created folder: {folderName} (ID: {result.Id})");
-                return result.Id;
+
+                Console.WriteLine($"✅ Created folder: {folderName} (ID: {result.Id ?? string.Empty})");
+                return result.Id ?? string.Empty;
             }
             catch (Exception ex)
             {

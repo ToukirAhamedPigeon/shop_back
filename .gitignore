@@ -115,6 +115,8 @@ dump.rdb
 wwwroot/
 
 credentials.json
+oauth-credentials.json
+src/Shared/Shared.API/GoogleDriveToken/
 *.json
 !appsettings*.json
 src/Shared/Shared.API/backups/*
