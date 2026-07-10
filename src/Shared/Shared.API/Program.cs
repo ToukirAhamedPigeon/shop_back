@@ -10,6 +10,7 @@ using shop_back.src.Shared.Infrastructure.Data;
 using shop_back.src.Shared.Infrastructure.Extensions;
 using shop_back.src.Shared.Infrastructure.Middlewares;
 using shop_back.src.Shared.Infrastructure.Services.Authorization;
+using shop_back.src.Shared.Infrastructure.Services;   // <-- ADD THIS for BackupSchedulerService
 using StackExchange.Redis;
 using System.IdentityModel.Tokens.Jwt;
 using shop_back.src.Shared.Infrastructure.Helpers;
@@ -144,6 +145,9 @@ builder.Services.AddHttpClient();
 builder.Services.AddSettings(builder.Configuration);
 builder.Services.AddRepositories();
 builder.Services.AddServices();
+
+// Register the background scheduler
+builder.Services.AddHostedService<BackupSchedulerService>();
 
 // ------------------- FILE STORAGE HELPERS -------------------
 var fileStorageType = Env.GetString("FILE_STORAGE_TYPE") ?? builder.Configuration["FILE_STORAGE_TYPE"] ?? "remote";

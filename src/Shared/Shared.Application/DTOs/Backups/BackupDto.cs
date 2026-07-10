@@ -61,12 +61,15 @@ namespace shop_back.src.Shared.Application.DTOs.Backups
     {
         public long Id { get; set; }
         public string Name { get; set; } = string.Empty;
-        public string CronExpression { get; set; } = string.Empty;
+        public string CronExpression { get; set; } = string.Empty;  // auto-generated
+        public int IntervalValue { get; set; } = 1;
+        public string IntervalUnit { get; set; } = "days";
         public bool IsActive { get; set; }
         public int RetentionDays { get; set; }
         public List<string> StorageDestinations { get; set; } = new();
         public DateTime? LastRunAt { get; set; }
         public DateTime? NextRunAt { get; set; }
+        public DateTime? CurrentTime { get; set; }
         public string? CreatedByName { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }

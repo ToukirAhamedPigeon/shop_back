@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using shop_back.src.Shared.Domain.Entities;
+using Npgsql.EntityFrameworkCore.PostgreSQL;
 
 namespace shop_back.src.Shared.Infrastructure.Data
 {
@@ -342,7 +343,8 @@ namespace shop_back.src.Shared.Infrastructure.Data
             });
 
             // ============================================
-            // DateTime conversion to UTC for all DateTime properties
+            // 🔥 FIXED: DateTime conversion to UTC for all DateTime properties
+            // This ensures all DateTime values are stored and retrieved as UTC
             // ============================================
             foreach (var entityType in modelBuilder.Model.GetEntityTypes())
             {
@@ -352,7 +354,7 @@ namespace shop_back.src.Shared.Infrastructure.Data
                     {
                         property.SetValueConverter(
                             new ValueConverter<DateTime, DateTime>(
-                                v => DateTime.SpecifyKind(v, DateTimeKind.Utc),
+                                v => v.Kind == DateTimeKind.Utc ? v : v.ToUniversalTime(),
                                 v => DateTime.SpecifyKind(v, DateTimeKind.Utc)
                             ));
                     }
@@ -360,7 +362,7 @@ namespace shop_back.src.Shared.Infrastructure.Data
                     {
                         property.SetValueConverter(
                             new ValueConverter<DateTime?, DateTime?>(
-                                v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v,
+                                v => v.HasValue ? (v.Value.Kind == DateTimeKind.Utc ? v.Value : v.Value.ToUniversalTime()) : v,
                                 v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v
                             ));
                     }

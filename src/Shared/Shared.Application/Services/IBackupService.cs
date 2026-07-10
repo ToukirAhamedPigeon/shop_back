@@ -26,5 +26,6 @@ namespace shop_back.src.Shared.Application.Services
         Task DeleteStorageDestinationAsync(long id, Guid? userId = null);
         Task<List<StorageDestinationDto>> GetStorageDestinationsAsync();
         Task<bool> TestStorageConnectionAsync(long id);
+        Task<DateTime?> GetNextScheduledBackupTimeAsync();
     }
 }

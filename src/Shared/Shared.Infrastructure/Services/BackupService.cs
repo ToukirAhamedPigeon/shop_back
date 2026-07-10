@@ -781,7 +781,9 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
         public async Task<BackupStatisticsDto> GetStatisticsAsync()
         {
-            return await _backupRepository.GetStatisticsAsync();
+            var stats = await _backupRepository.GetStatisticsAsync();
+            stats.NextBackupAt = await GetNextScheduledBackupTimeAsync();
+            return stats;
         }
 
         public async Task CleanupOldBackupsAsync(int retentionDays, Guid? userId = null)
@@ -842,15 +844,31 @@ namespace shop_back.src.Shared.Infrastructure.Services
         }
 
         // Schedule management methods
+       // src/Shared/Shared.Infrastructure/Services/BackupService.cs (only relevant parts)
+
         public async Task<BackupScheduleDto> CreateScheduleAsync(BackupScheduleDto schedule, Guid? userId = null)
         {
+            var cron = CronHelper.GenerateCronExpression(schedule.IntervalValue, schedule.IntervalUnit);
+            var baseTime = DateTime.UtcNow;
+            var nextRun = CronHelper.GetNextOccurrence(cron, baseTime);
+
+            // Ensure the value is UTC
+            var utcNextRun = nextRun.HasValue ? DateTime.SpecifyKind(nextRun.Value, DateTimeKind.Utc) : (DateTime?)null;
+
+            Console.WriteLine($"📅 Creating schedule: {schedule.Name}");
+            Console.WriteLine($"   Base Time (UTC): {baseTime:yyyy-MM-dd HH:mm:ss}");
+            Console.WriteLine($"   NextRunAt (UTC): {utcNextRun:yyyy-MM-dd HH:mm:ss}");
+
             var entity = new BackupSchedule
             {
                 Name = schedule.Name,
-                CronExpression = schedule.CronExpression,
+                CronExpression = cron,
+                IntervalValue = schedule.IntervalValue,
+                IntervalUnit = schedule.IntervalUnit,
                 IsActive = schedule.IsActive,
                 RetentionDays = schedule.RetentionDays,
                 StorageDestinations = schedule.StorageDestinations,
+                NextRunAt = utcNextRun,
                 CreatedBy = userId,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -868,11 +886,22 @@ namespace shop_back.src.Shared.Infrastructure.Services
             if (entity == null)
                 throw new Exception("Schedule not found");
 
+            var cron = CronHelper.GenerateCronExpression(schedule.IntervalValue, schedule.IntervalUnit);
+            var baseTime = DateTime.UtcNow;
+            var nextRun = CronHelper.GetNextOccurrence(cron, baseTime);
+
+            Console.WriteLine($"📅 Updating schedule: {schedule.Name} (ID: {id})");
+            Console.WriteLine($"   Base Time (UTC): {baseTime:yyyy-MM-dd HH:mm:ss}");
+            Console.WriteLine($"   NextRunAt (UTC): {nextRun:yyyy-MM-dd HH:mm:ss}");
+
             entity.Name = schedule.Name;
-            entity.CronExpression = schedule.CronExpression;
+            entity.CronExpression = cron;
+            entity.IntervalValue = schedule.IntervalValue;
+            entity.IntervalUnit = schedule.IntervalUnit;
             entity.IsActive = schedule.IsActive;
             entity.RetentionDays = schedule.RetentionDays;
             entity.StorageDestinations = schedule.StorageDestinations;
+            entity.NextRunAt = nextRun;
             entity.UpdatedAt = DateTime.UtcNow;
 
             await _scheduleRepository.UpdateAsync(entity);
@@ -880,7 +909,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
             return MapToScheduleDto(entity);
         }
-
         public async Task DeleteScheduleAsync(long id, Guid? userId = null)
         {
             await _scheduleRepository.DeleteAsync(id);
@@ -926,6 +954,35 @@ namespace shop_back.src.Shared.Infrastructure.Services
             await _storageRepository.SaveChangesAsync();
 
             return MapToStorageDto(entity);
+        }
+
+        public async Task<DateTime?> GetNextScheduledBackupTimeAsync()
+        {
+            var schedules = await _scheduleRepository.GetActiveSchedulesAsync();
+            Console.WriteLine($"🔍 Found {schedules.Count} active schedules.");
+            
+            if (!schedules.Any())
+            {
+                Console.WriteLine("🔍 No active schedules – returning null.");
+                return null;
+            }
+            
+            foreach (var s in schedules)
+            {
+                Console.WriteLine($"   ID: {s.Id}, Name: {s.Name}, NextRunAt: {s.NextRunAt:yyyy-MM-dd HH:mm:ss}");
+            }
+            
+            var min = schedules.Where(s => s.NextRunAt.HasValue).Min(s => s.NextRunAt);
+            if (min.HasValue)
+            {
+                Console.WriteLine($"✅ Min NextRunAt: {min:yyyy-MM-dd HH:mm:ss}");
+                return min;
+            }
+
+            // Fallback: compute from cron
+            var first = schedules.First();
+            Console.WriteLine($"⚠️ No NextRunAt, computing from cron: {first.CronExpression}");
+            return CronHelper.GetNextOccurrence(first.CronExpression, DateTime.UtcNow);
         }
 
         public async Task<StorageDestinationDto> UpdateStorageDestinationAsync(long id, StorageDestinationDto destination, Guid? userId = null)
@@ -1044,6 +1101,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 Id = schedule.Id,
                 Name = schedule.Name,
                 CronExpression = schedule.CronExpression,
+                IntervalValue = schedule.IntervalValue,
+                IntervalUnit = schedule.IntervalUnit,
                 IsActive = schedule.IsActive,
                 RetentionDays = schedule.RetentionDays,
                 StorageDestinations = schedule.StorageDestinations,

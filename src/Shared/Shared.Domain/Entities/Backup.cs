@@ -81,6 +81,12 @@ namespace shop_back.src.Shared.Domain.Entities
         [Column("is_active")]
         public bool IsActive { get; set; } = true;
 
+        [Column("interval_value")]
+        public int IntervalValue { get; set; } = 1;
+
+        [Column("interval_unit")]
+        public string IntervalUnit { get; set; } = "days";
+
         [Column("retention_days")]
         public int RetentionDays { get; set; } = 7;
 
