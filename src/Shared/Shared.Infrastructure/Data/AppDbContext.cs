@@ -34,6 +34,7 @@ namespace shop_back.src.Shared.Infrastructure.Data
         public DbSet<BackupSchedule> BackupSchedules { get; set; } = null!;
         public DbSet<StorageDestination> StorageDestinations { get; set; } = null!;
         public DbSet<BackupLog> BackupLogs { get; set; } = null!;
+        public DbSet<AppSetting> AppSettings { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -339,6 +340,31 @@ namespace shop_back.src.Shared.Infrastructure.Data
                 entity.HasOne(e => e.CreatedByUser)
                     .WithMany()
                     .HasForeignKey(e => e.CreatedBy)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            // AppSetting configuration
+            modelBuilder.Entity<AppSetting>(entity =>
+            {
+                entity.ToTable("app_settings");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Category).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.Key).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.DataType).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.Description).HasMaxLength(500);
+                
+                entity.HasIndex(e => new { e.Category, e.Key }).IsUnique();
+                entity.HasIndex(e => e.Category);
+                entity.HasIndex(e => e.IsActive);
+                
+                entity.HasOne(e => e.CreatedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.CreatedBy)
+                    .OnDelete(DeleteBehavior.SetNull);
+                
+                entity.HasOne(e => e.UpdatedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.UpdatedBy)
                     .OnDelete(DeleteBehavior.SetNull);
             });
 

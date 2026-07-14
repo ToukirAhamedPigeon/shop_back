@@ -37,6 +37,7 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
             services.AddScoped<UserLogHelper>();
             services.AddScoped<IBackupService, BackupService>();
             services.AddScoped<IGoogleDriveService, GoogleDriveService>();
+            services.AddScoped<IAppSettingService, AppSettingService>();
             services.AddHttpContextAccessor();
 
             return services;
