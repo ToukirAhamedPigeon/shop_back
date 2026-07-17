@@ -30,7 +30,8 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
             services.AddScoped<IBackupScheduleRepository, BackupScheduleRepository>();
             services.AddScoped<IStorageDestinationRepository, StorageDestinationRepository>();
             services.AddScoped<IBackupLogRepository, BackupLogRepository>();
-            services.AddScoped<IAppSettingRepository, AppSettingRepository>();
+            services.AddScoped<IUserSettingRepository, UserSettingRepository>();
+            services.AddScoped<IBrandingSettingRepository, BrandingSettingRepository>();
             return services;
         }
     }

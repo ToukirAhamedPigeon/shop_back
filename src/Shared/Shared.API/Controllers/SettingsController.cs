@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using shop_back.src.Shared.Application.DTOs.Settings;
 using shop_back.src.Shared.Application.Services;
-using shop_back.src.Shared.Infrastructure.Services.Authorization;
 using System.IdentityModel.Tokens.Jwt;
 
 namespace shop_back.src.Shared.API.Controllers
@@ -13,116 +12,111 @@ namespace shop_back.src.Shared.API.Controllers
     [Authorize]
     public class SettingsController : ControllerBase
     {
-        private readonly IAppSettingService _settingsService;
+        private readonly IUserSettingService _settingsService;
 
-        public SettingsController(IAppSettingService settingsService)
+        public SettingsController(IUserSettingService settingsService)
         {
             _settingsService = settingsService;
         }
 
+        private Guid GetCurrentUserId()
+        {
+            var userIdClaim = User?.FindFirst("UserId")?.Value 
+                              ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            
+            if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+                throw new UnauthorizedAccessException("User not authenticated");
+            
+            return userId;
+        }
+
         /// <summary>
-        /// Get all settings grouped by category (Admin only)
+        /// Get all settings (User settings + Branding)
         /// </summary>
         [HttpGet]
-        [HasPermissionAny("read-admin-settings")]
         public async Task<IActionResult> GetAllSettings()
         {
-            var result = await _settingsService.GetAllSettingsAsync();
+            var userId = GetCurrentUserId();
+            var result = await _settingsService.GetAllSettingsAsync(userId);
             return Ok(result);
         }
 
         /// <summary>
-        /// Get settings for a specific category
+        /// Get user settings (Theme + General)
         /// </summary>
-        [HttpGet("category/{category}")]
-        [HasPermissionAny("read-admin-settings")]
-        public async Task<IActionResult> GetSettingsByCategory(string category)
+        [HttpGet("user")]
+        public async Task<IActionResult> GetUserSettings()
         {
-            var result = await _settingsService.GetSettingsByCategoryAsync(category);
+            var userId = GetCurrentUserId();
+            var result = await _settingsService.GetUserSettingsAsync(userId);
             return Ok(result);
         }
 
         /// <summary>
-        /// Get public settings (Theme & Branding) - No authentication required
+        /// Get branding settings (Global)
         /// </summary>
-        [HttpGet("public")]
+        [HttpGet("branding")]
         [AllowAnonymous]
-        public async Task<IActionResult> GetPublicSettings()
+        public async Task<IActionResult> GetBrandingSettings()
         {
-            var result = await _settingsService.GetPublicSettingsAsync();
+            var result = await _settingsService.GetBrandingSettingsAsync();
             return Ok(result);
         }
 
         /// <summary>
-        /// Get a single setting by category and key
+        /// Update Theme settings
         /// </summary>
-        [HttpGet("{category}/{key}")]
-        [HasPermissionAny("read-admin-settings")]
-        public async Task<IActionResult> GetSetting(string category, string key)
+        [HttpPut("theme")]
+        public async Task<IActionResult> UpdateTheme([FromBody] UpdateThemeSettingsDto settings)
         {
-            var result = await _settingsService.GetSettingAsync(category, key);
-            if (result == null) return NotFound();
+            var userId = GetCurrentUserId();
+            var result = await _settingsService.UpdateThemeSettingsAsync(userId, settings, userId.ToString());
             return Ok(result);
         }
 
         /// <summary>
-        /// Update a single setting
+        /// Update General settings
         /// </summary>
-        [HttpPut("{id}")]
-        [HasPermissionAny("update-admin-settings")]
-        public async Task<IActionResult> UpdateSetting(Guid id, [FromBody] UpdateSettingRequest request)
+        [HttpPut("general")]
+        public async Task<IActionResult> UpdateGeneral([FromBody] UpdateGeneralSettingsDto settings)
         {
-            var currentUserId = User?.FindFirst("UserId")?.Value 
-                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-            
-            var result = await _settingsService.UpdateSettingAsync(id, request.Value, currentUserId);
+            var userId = GetCurrentUserId();
+            var result = await _settingsService.UpdateGeneralSettingsAsync(userId, settings, userId.ToString());
             return Ok(result);
         }
 
         /// <summary>
-        /// Update multiple settings in a category
+        /// Update Branding settings (Developer only)
         /// </summary>
-        [HttpPut("category/{category}")]
-        [HasPermissionAny("update-admin-settings")]
-        public async Task<IActionResult> UpdateCategorySettings(string category, [FromBody] Dictionary<string, object> settings)
+        [HttpPut("branding")]
+        [Authorize(Roles = "Developer")]
+        public async Task<IActionResult> UpdateBranding([FromBody] UpdateBrandingSettingsDto settings)
         {
-            var currentUserId = User?.FindFirst("UserId")?.Value 
-                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-            
-            var result = await _settingsService.UpdateCategorySettingsAsync(category, settings, currentUserId);
-            return Ok(new { success = result, message = result ? "Settings updated successfully" : "No changes were made" });
+            var userId = GetCurrentUserId();
+            var result = await _settingsService.UpdateBrandingSettingsAsync(settings, userId.ToString());
+            return Ok(result);
         }
 
         /// <summary>
-        /// Reset a category to default values
+        /// Reset Theme settings to defaults
         /// </summary>
-        [HttpPost("reset/{category}")]
-        [HasPermissionAny("update-admin-settings")]
-        public async Task<IActionResult> ResetCategory(string category)
+        [HttpPost("reset/theme")]
+        public async Task<IActionResult> ResetTheme()
         {
-            var currentUserId = User?.FindFirst("UserId")?.Value 
-                                ?? User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-            
-            var result = await _settingsService.ResetCategoryToDefaultAsync(category, currentUserId);
-            if (!result) return BadRequest(new { message = "Failed to reset settings" });
-            
-            return Ok(new { message = "Settings reset to defaults" });
+            var userId = GetCurrentUserId();
+            var result = await _settingsService.ResetThemeSettingsAsync(userId, userId.ToString());
+            return Ok(result);
         }
 
         /// <summary>
-        /// Clear settings cache
+        /// Reset General settings to defaults
         /// </summary>
-        [HttpPost("clear-cache")]
-        [HasPermissionAny("update-admin-settings")]
-        public async Task<IActionResult> ClearCache()
+        [HttpPost("reset/general")]
+        public async Task<IActionResult> ResetGeneral()
         {
-            var result = await _settingsService.ClearCacheAsync();
-            return Ok(new { success = result });
+            var userId = GetCurrentUserId();
+            var result = await _settingsService.ResetGeneralSettingsAsync(userId, userId.ToString());
+            return Ok(result);
         }
-    }
-
-    public class UpdateSettingRequest
-    {
-        public string Value { get; set; } = string.Empty;
     }
 }

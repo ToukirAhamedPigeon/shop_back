@@ -34,7 +34,9 @@ namespace shop_back.src.Shared.Infrastructure.Data
         public DbSet<BackupSchedule> BackupSchedules { get; set; } = null!;
         public DbSet<StorageDestination> StorageDestinations { get; set; } = null!;
         public DbSet<BackupLog> BackupLogs { get; set; } = null!;
-        public DbSet<AppSetting> AppSettings { get; set; } = null!;
+
+        public DbSet<UserSetting> UserSettings { get; set; } = null!;
+        public DbSet<BrandingSetting> BrandingSettings { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -343,24 +345,32 @@ namespace shop_back.src.Shared.Infrastructure.Data
                     .OnDelete(DeleteBehavior.SetNull);
             });
 
-            // AppSetting configuration
-            modelBuilder.Entity<AppSetting>(entity =>
+            // UserSetting configuration
+            modelBuilder.Entity<UserSetting>(entity =>
             {
-                entity.ToTable("app_settings");
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Category).IsRequired().HasMaxLength(100);
-                entity.Property(e => e.Key).IsRequired().HasMaxLength(100);
-                entity.Property(e => e.DataType).IsRequired().HasMaxLength(50);
-                entity.Property(e => e.Description).HasMaxLength(500);
+                entity.ToTable("user_settings");
+                entity.HasKey(e => e.UserId);
+                entity.Property(e => e.SettingsJson).IsRequired().HasColumnType("jsonb");
+                entity.HasIndex(e => e.UpdatedAt);
                 
-                entity.HasIndex(e => new { e.Category, e.Key }).IsUnique();
-                entity.HasIndex(e => e.Category);
-                entity.HasIndex(e => e.IsActive);
-                
-                entity.HasOne(e => e.CreatedByUser)
+                entity.HasOne(e => e.User)
+                    .WithOne()
+                    .HasForeignKey<UserSetting>(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                    
+                entity.HasOne(e => e.UpdatedByUser)
                     .WithMany()
-                    .HasForeignKey(e => e.CreatedBy)
+                    .HasForeignKey(e => e.UpdatedBy)
                     .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            // BrandingSetting configuration
+            modelBuilder.Entity<BrandingSetting>(entity =>
+            {
+                entity.ToTable("branding_settings");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.SettingsJson).IsRequired().HasColumnType("jsonb");
+                entity.HasIndex(e => e.UpdatedAt);
                 
                 entity.HasOne(e => e.UpdatedByUser)
                     .WithMany()
