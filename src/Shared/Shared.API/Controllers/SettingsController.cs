@@ -89,7 +89,7 @@ namespace shop_back.src.Shared.API.Controllers
         /// Update Branding settings (Developer only)
         /// </summary>
         [HttpPut("branding")]
-        [Authorize(Roles = "Developer")]
+        [Authorize(Roles = "developer")]
         public async Task<IActionResult> UpdateBranding([FromBody] UpdateBrandingSettingsDto settings)
         {
             var userId = GetCurrentUserId();
