@@ -1,4 +1,5 @@
 // D:\shop\shop_back\src\Shared\Shared.Application\DTOs\Settings\UserSettingsDto.cs
+using Microsoft.AspNetCore.Http;
 using System;
 
 namespace shop_back.src.Shared.Application.DTOs.Settings
@@ -42,10 +43,14 @@ namespace shop_back.src.Shared.Application.DTOs.Settings
     {
         public string? primary_color { get; set; }
         public string? secondary_color { get; set; }
-        public string? sidebar_bg_image { get; set; }
-        public string? login_bg_image { get; set; }
+        public string? sidebar_bg_image { get; set; } // URL/path (read-only)
+        public string? login_bg_image { get; set; }   // URL/path (read-only)
         public bool? dark_mode { get; set; }
         public string? custom_css { get; set; }
+
+        // File upload properties
+        public IFormFile? SidebarBgFile { get; set; }
+        public IFormFile? LoginBgFile { get; set; }
     }
 
     public class UpdateGeneralSettingsDto
@@ -60,9 +65,11 @@ namespace shop_back.src.Shared.Application.DTOs.Settings
     public class UpdateBrandingSettingsDto
     {
         public string? app_name { get; set; }
-        public string? logo { get; set; }
-        public string? favicon { get; set; }
         public string? footer_text { get; set; }
+
+        // File upload properties (not stored in DB directly)
+        public IFormFile? LogoFile { get; set; }
+        public IFormFile? FaviconFile { get; set; }
     }
 
     public class SettingsResponseDto

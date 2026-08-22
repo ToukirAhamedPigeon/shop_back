@@ -39,6 +39,7 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
             services.AddScoped<IGoogleDriveService, GoogleDriveService>();
             // services.AddScoped<IAppSettingService, AppSettingService>();
             services.AddScoped<IUserSettingService, UserSettingService>();
+            services.AddScoped<IDocumentationService, DocumentationService>();
             services.AddHttpContextAccessor();
 
             return services;

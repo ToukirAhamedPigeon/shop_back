@@ -51,6 +51,51 @@ namespace shop_back.src.Shared.Infrastructure.Seeds
                     await context.SaveChangesAsync();
                 }
 
+                // 3b. Documentation permissions (ships with the Documentation feature)
+                var readDocDeveloper = await context.Permissions.FirstOrDefaultAsync(p => p.Name == "read-admin-doc-developer");
+                if (readDocDeveloper == null)
+                {
+                    readDocDeveloper = new Permission { Name = "read-admin-doc-developer", GuardName = "admin" };
+                    context.Permissions.Add(readDocDeveloper);
+                    await context.SaveChangesAsync();
+                }
+
+                var readDocUserGuide = await context.Permissions.FirstOrDefaultAsync(p => p.Name == "read-admin-doc-user-guide");
+                if (readDocUserGuide == null)
+                {
+                    readDocUserGuide = new Permission { Name = "read-admin-doc-user-guide", GuardName = "admin" };
+                    context.Permissions.Add(readDocUserGuide);
+                    await context.SaveChangesAsync();
+                }
+
+                // read-admin-doc-developer -> developer role only
+                if (!context.RolePermissions.Any(rp => rp.RoleId == devRole.Id && rp.PermissionId == readDocDeveloper.Id))
+                {
+                    context.RolePermissions.Add(new RolePermission
+                    {
+                        RoleId = devRole.Id,
+                        PermissionId = readDocDeveloper.Id
+                    });
+                    await context.SaveChangesAsync();
+                }
+
+                // read-admin-doc-user-guide -> every existing role (developer, admin, super-admin, ...).
+                // Iterating all roles rather than hardcoding names keeps this correct regardless of
+                // exactly which roles exist in a given environment's database.
+                var allRoles = await context.Roles.ToListAsync();
+                foreach (var role in allRoles)
+                {
+                    if (!context.RolePermissions.Any(rp => rp.RoleId == role.Id && rp.PermissionId == readDocUserGuide.Id))
+                    {
+                        context.RolePermissions.Add(new RolePermission
+                        {
+                            RoleId = role.Id,
+                            PermissionId = readDocUserGuide.Id
+                        });
+                        await context.SaveChangesAsync();
+                    }
+                }
+
                 // 4. User
                 var userEmail = "toukir.ahamed.pigeon@gmail.com";
                 var user = await context.Users.FirstOrDefaultAsync(u => u.Email == userEmail);

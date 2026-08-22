@@ -67,7 +67,7 @@ namespace shop_back.src.Shared.API.Controllers
         /// Update Theme settings
         /// </summary>
         [HttpPut("theme")]
-        public async Task<IActionResult> UpdateTheme([FromBody] UpdateThemeSettingsDto settings)
+        public async Task<IActionResult> UpdateTheme([FromForm] UpdateThemeSettingsDto settings)
         {
             var userId = GetCurrentUserId();
             var result = await _settingsService.UpdateThemeSettingsAsync(userId, settings, userId.ToString());
@@ -90,7 +90,7 @@ namespace shop_back.src.Shared.API.Controllers
         /// </summary>
         [HttpPut("branding")]
         [Authorize(Roles = "developer")]
-        public async Task<IActionResult> UpdateBranding([FromBody] UpdateBrandingSettingsDto settings)
+        public async Task<IActionResult> UpdateBranding([FromForm] UpdateBrandingSettingsDto settings)
         {
             var userId = GetCurrentUserId();
             var result = await _settingsService.UpdateBrandingSettingsAsync(settings, userId.ToString());

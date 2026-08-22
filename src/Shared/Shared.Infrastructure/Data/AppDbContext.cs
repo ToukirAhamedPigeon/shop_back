@@ -350,14 +350,15 @@ namespace shop_back.src.Shared.Infrastructure.Data
             {
                 entity.ToTable("user_settings");
                 entity.HasKey(e => e.UserId);
-                entity.Property(e => e.SettingsJson).IsRequired().HasColumnType("jsonb");
+                entity.Property(e => e.SettingsJson).IsRequired(false).HasColumnType("jsonb");
                 entity.HasIndex(e => e.UpdatedAt);
                 
                 entity.HasOne(e => e.User)
                     .WithOne()
                     .HasForeignKey<UserSetting>(e => e.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-                    
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired(false);  // <-- ADD THIS LINE
+                
                 entity.HasOne(e => e.UpdatedByUser)
                     .WithMany()
                     .HasForeignKey(e => e.UpdatedBy)

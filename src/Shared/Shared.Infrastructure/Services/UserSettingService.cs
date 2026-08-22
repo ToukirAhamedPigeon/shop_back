@@ -1,8 +1,9 @@
-// D:\shop\shop_back\src\Shared\Shared.Infrastructure\Services\UserSettingService.cs
+// src/Shared/Shared.Infrastructure/Services/UserSettingService.cs
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using StackExchange.Redis;
+using Microsoft.AspNetCore.Http;
 using shop_back.src.Shared.Application.DTOs.Settings;
 using shop_back.src.Shared.Application.Repositories;
 using shop_back.src.Shared.Application.Services;
@@ -83,7 +84,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
             var userSettings = await GetUserSettingsAsync(userId);
             var brandingSettings = await GetBrandingSettingsAsync();
 
-            // BrandingSettingsDto doesn't have UpdatedAt/UpdatedBy, so we use user's values
             return new SettingsResponseDto
             {
                 User = userSettings,
@@ -98,19 +98,47 @@ namespace shop_back.src.Shared.Infrastructure.Services
             var userSetting = await _userSettingRepository.GetOrCreateAsync(userId);
             var currentSettings = JsonConvert.DeserializeObject<UserSettingsDto>(userSetting.SettingsJson)!;
 
-            // Update only provided fields
             var theme = currentSettings.Theme;
+            
+            // Handle sidebar background image
+            if (settings.SidebarBgFile != null)
+            {
+                if (!string.IsNullOrEmpty(theme.sidebar_bg_image))
+                {
+                    await FileHelper.DeleteFileAsync(theme.sidebar_bg_image);
+                }
+                
+                var imagePath = await UploadThemeImageAsync(settings.SidebarBgFile, "themes/sidebar");
+                if (!string.IsNullOrEmpty(imagePath))
+                {
+                    theme.sidebar_bg_image = imagePath;
+                }
+            }
+            
+            // Handle login background image
+            if (settings.LoginBgFile != null)
+            {
+                if (!string.IsNullOrEmpty(theme.login_bg_image))
+                {
+                    await FileHelper.DeleteFileAsync(theme.login_bg_image);
+                }
+                
+                var imagePath = await UploadThemeImageAsync(settings.LoginBgFile, "themes/login");
+                if (!string.IsNullOrEmpty(imagePath))
+                {
+                    theme.login_bg_image = imagePath;
+                }
+            }
+            
+            // Handle other fields
             if (settings.primary_color != null) theme.primary_color = settings.primary_color;
             if (settings.secondary_color != null) theme.secondary_color = settings.secondary_color;
-            if (settings.sidebar_bg_image != null) theme.sidebar_bg_image = settings.sidebar_bg_image;
-            if (settings.login_bg_image != null) theme.login_bg_image = settings.login_bg_image;
             if (settings.dark_mode.HasValue) theme.dark_mode = settings.dark_mode.Value;
             if (settings.custom_css != null) theme.custom_css = settings.custom_css;
 
             var updatedJson = JsonConvert.SerializeObject(new { Theme = theme, General = currentSettings.General });
             userSetting.SettingsJson = updatedJson;
 
-            // Parse updatedBy to Guid
             Guid? updatedByGuid = null;
             if (!string.IsNullOrEmpty(updatedBy) && Guid.TryParse(updatedBy, out var parsedGuid))
             {
@@ -121,10 +149,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
             await _userSettingRepository.UpdateAsync(userSetting);
             await _userSettingRepository.SaveChangesAsync();
 
-            // Clear cache
             await ClearUserCacheAsync(userId);
 
-            // Log changes
             await _userLogHelper.LogAsync(
                 userId: updatedByGuid ?? userId,
                 actionType: "Update",
@@ -137,12 +163,34 @@ namespace shop_back.src.Shared.Infrastructure.Services
             return await GetUserSettingsAsync(userId);
         }
 
+        private async Task<string?> UploadThemeImageAsync(IFormFile? file, string folder)
+        {
+            if (file == null || file.Length == 0)
+                return null;
+
+            if (file.Length > 10 * 1024 * 1024) // 10MB limit
+                throw new Exception("Image size must be less than 10MB");
+
+            var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp", "image/jpg" };
+            if (!allowedTypes.Contains(file.ContentType))
+                throw new Exception("Only JPG, PNG, WEBP images are allowed");
+
+            var resizeOptions = new ImageResizeOptions
+            {
+                Enabled = true,
+                MaxWidth = 1920,
+                MaxHeight = 1080,
+                ResizeMode = ImageResizeMode.Max
+            };
+
+            return await FileHelper.SaveFileAsync(file, folder, true, resizeOptions);
+        }
+
         public async Task<UserSettingsDto> UpdateGeneralSettingsAsync(Guid userId, UpdateGeneralSettingsDto settings, string? updatedBy)
         {
             var userSetting = await _userSettingRepository.GetOrCreateAsync(userId);
             var currentSettings = JsonConvert.DeserializeObject<UserSettingsDto>(userSetting.SettingsJson)!;
 
-            // Update only provided fields
             var general = currentSettings.General;
             if (settings.default_language != null) general.default_language = settings.default_language;
             if (settings.timezone != null) general.timezone = settings.timezone;
@@ -153,7 +201,6 @@ namespace shop_back.src.Shared.Infrastructure.Services
             var updatedJson = JsonConvert.SerializeObject(new { Theme = currentSettings.Theme, General = general });
             userSetting.SettingsJson = updatedJson;
 
-            // Parse updatedBy to Guid
             Guid? updatedByGuid = null;
             if (!string.IsNullOrEmpty(updatedBy) && Guid.TryParse(updatedBy, out var parsedGuid))
             {
@@ -164,10 +211,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
             await _userSettingRepository.UpdateAsync(userSetting);
             await _userSettingRepository.SaveChangesAsync();
 
-            // Clear cache
             await ClearUserCacheAsync(userId);
 
-            // Log changes
             await _userLogHelper.LogAsync(
                 userId: updatedByGuid ?? userId,
                 actionType: "Update",
@@ -185,15 +230,42 @@ namespace shop_back.src.Shared.Infrastructure.Services
             var branding = await _brandingSettingRepository.GetOrCreateAsync();
             var currentSettings = JsonConvert.DeserializeObject<BrandingSettingsDto>(branding.SettingsJson)!;
 
-            // Update only provided fields
+            // Handle Logo upload
+            if (settings.LogoFile != null)
+            {
+                if (!string.IsNullOrEmpty(currentSettings.logo))
+                {
+                    await FileHelper.DeleteFileAsync(currentSettings.logo);
+                }
+                
+                var logoPath = await UploadBrandingImageAsync(settings.LogoFile, "branding");
+                if (!string.IsNullOrEmpty(logoPath))
+                {
+                    currentSettings.logo = logoPath;
+                }
+            }
+
+            // Handle Favicon upload
+            if (settings.FaviconFile != null)
+            {
+                if (!string.IsNullOrEmpty(currentSettings.favicon))
+                {
+                    await FileHelper.DeleteFileAsync(currentSettings.favicon);
+                }
+                
+                var faviconPath = await UploadBrandingImageAsync(settings.FaviconFile, "branding");
+                if (!string.IsNullOrEmpty(faviconPath))
+                {
+                    currentSettings.favicon = faviconPath;
+                }
+            }
+
+            // Handle other fields
             if (settings.app_name != null) currentSettings.app_name = settings.app_name;
-            if (settings.logo != null) currentSettings.logo = settings.logo;
-            if (settings.favicon != null) currentSettings.favicon = settings.favicon;
             if (settings.footer_text != null) currentSettings.footer_text = settings.footer_text;
 
             branding.SettingsJson = JsonConvert.SerializeObject(currentSettings);
 
-            // Parse updatedBy to Guid
             Guid? updatedByGuid = null;
             if (!string.IsNullOrEmpty(updatedBy) && Guid.TryParse(updatedBy, out var parsedGuid))
             {
@@ -204,10 +276,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
             await _brandingSettingRepository.UpdateAsync(branding);
             await _brandingSettingRepository.SaveChangesAsync();
 
-            // Clear cache
             await ClearBrandingCacheAsync();
 
-            // Log changes
             await _userLogHelper.LogAsync(
                 userId: updatedByGuid ?? Guid.Empty,
                 actionType: "Update",
@@ -220,18 +290,39 @@ namespace shop_back.src.Shared.Infrastructure.Services
             return await GetBrandingSettingsAsync();
         }
 
+        private async Task<string?> UploadBrandingImageAsync(IFormFile? file, string folder)
+        {
+            if (file == null || file.Length == 0)
+                return null;
+
+            if (file.Length > 5 * 1024 * 1024) // 5MB limit
+                throw new Exception("File size must be less than 5MB");
+
+            var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp", "image/svg+xml" };
+            if (!allowedTypes.Contains(file.ContentType))
+                throw new Exception("Only JPG, PNG, WEBP, and SVG images are allowed");
+
+            var resizeOptions = new ImageResizeOptions
+            {
+                Enabled = true,
+                MaxWidth = 500,
+                MaxHeight = 500,
+                ResizeMode = ImageResizeMode.Max
+            };
+
+            return await FileHelper.SaveFileAsync(file, folder, true, resizeOptions);
+        }
+
         public async Task<UserSettingsDto> ResetThemeSettingsAsync(Guid userId, string? updatedBy)
         {
             var userSetting = await _userSettingRepository.GetOrCreateAsync(userId);
             var currentSettings = JsonConvert.DeserializeObject<UserSettingsDto>(userSetting.SettingsJson)!;
 
-            // Reset to defaults
             currentSettings.Theme = _defaultTheme;
 
             var updatedJson = JsonConvert.SerializeObject(new { Theme = _defaultTheme, General = currentSettings.General });
             userSetting.SettingsJson = updatedJson;
 
-            // Parse updatedBy to Guid
             Guid? updatedByGuid = null;
             if (!string.IsNullOrEmpty(updatedBy) && Guid.TryParse(updatedBy, out var parsedGuid))
             {
@@ -259,13 +350,11 @@ namespace shop_back.src.Shared.Infrastructure.Services
             var userSetting = await _userSettingRepository.GetOrCreateAsync(userId);
             var currentSettings = JsonConvert.DeserializeObject<UserSettingsDto>(userSetting.SettingsJson)!;
 
-            // Reset to defaults
             currentSettings.General = _defaultGeneral;
 
             var updatedJson = JsonConvert.SerializeObject(new { Theme = currentSettings.Theme, General = _defaultGeneral });
             userSetting.SettingsJson = updatedJson;
 
-            // Parse updatedBy to Guid
             Guid? updatedByGuid = null;
             if (!string.IsNullOrEmpty(updatedBy) && Guid.TryParse(updatedBy, out var parsedGuid))
             {

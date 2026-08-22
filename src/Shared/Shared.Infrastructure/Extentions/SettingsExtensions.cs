@@ -9,6 +9,7 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
         public static IServiceCollection AddSettings(this IServiceCollection services, IConfiguration configuration)
         {
             services.Configure<SmtpSettings>(configuration.GetSection("SmtpSettings"));
+            services.Configure<DocumentationSettings>(configuration.GetSection("Documentation"));
             // Add other app settings here if needed
             return services;
         }
