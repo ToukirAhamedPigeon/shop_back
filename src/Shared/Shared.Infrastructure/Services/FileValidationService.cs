@@ -24,7 +24,7 @@ namespace shop_back.src.Shared.Infrastructure.Services
 
             // Check extension
             if (options.AllowedExtensions.Any() && !options.AllowedExtensions.Contains(extension))
-                throw new InvalidOperationException($"File type '{extension}' is not allowed. Allowed: {string.Join(", ", options.AllowedExtensions)}");
+                throw new InvalidOperationException($"{file.FileName} is not an allowed file type. Allowed: {string.Join(", ", options.AllowedExtensions)}");
 
             // Check MIME type
             if (options.AllowedMimeTypes.Any() && !options.AllowedMimeTypes.Contains(contentType))

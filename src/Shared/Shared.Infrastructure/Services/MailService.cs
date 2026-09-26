@@ -31,19 +31,22 @@ namespace shop_back.src.Shared.Infrastructure.Services
         private readonly IMailAttachmentRepository _attachmentRepository;
         private readonly IUserRepository _userRepository;
         private readonly IWebHostEnvironment _environment;
+        private readonly IFileValidationService _fileValidationService;
 
         public MailService(
             IMailRepository mailRepository,
             IMailTemplateRepository templateRepository,
             IMailAttachmentRepository attachmentRepository,
             IUserRepository userRepository,
-            IWebHostEnvironment environment)
+            IWebHostEnvironment environment,
+            IFileValidationService fileValidationService)
         {
             _mailRepository = mailRepository;
             _templateRepository = templateRepository;
             _attachmentRepository = attachmentRepository;
             _userRepository = userRepository;
             _environment = environment;
+            _fileValidationService = fileValidationService;
         }
 
         private string GenerateMessageId()
@@ -198,6 +201,16 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 }
             }
             
+            // Reject disallowed attachments before anything is saved, stored or sent.
+            // Throws InvalidOperationException, which MailController returns as 400.
+            if (request.Attachments != null)
+            {
+                foreach (var file in request.Attachments.Where(f => f != null && f.Length > 0))
+                {
+                    await _fileValidationService.ValidateAsync(file, FileValidationPresets.MailAttachment);
+                }
+            }
+
             var fromEmail = Env.GetString("CompanyEmail") ?? Env.GetString("SmtpUser");
 
             // Create mail record first (without attachments)

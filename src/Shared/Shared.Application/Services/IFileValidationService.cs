@@ -25,10 +25,26 @@ namespace shop_back.src.Shared.Application.Services
             AllowedExtensions = new() { ".jpg", ".jpeg", ".png", ".webp" }
         };
 
+        // Mirrors the allow-list in shop_admin_front ComposeMail.tsx. Checked by
+        // extension only: browsers report MIME types inconsistently (empty for
+        // .7z/.rar, .csv sent as application/vnd.ms-excel on Windows). HTML and
+        // SVG are deliberately excluded because both can carry scripts.
         public static FileValidationOptions MailAttachment = new()
         {
             MaxFileSize = 25 * 1024 * 1024, // 25MB
-            AllowAllTypes = true // Allow all file types for mail attachments
+            AllowedExtensions = new()
+            {
+                // Images
+                ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp",
+                // Documents
+                ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".rtf", ".xml",
+                // Archives
+                ".zip", ".rar", ".7z",
+                // Audio
+                ".mp3", ".wav", ".ogg", ".m4a", ".flac",
+                // Video
+                ".mp4", ".mpeg", ".mpg", ".mov", ".avi", ".mkv"
+            }
         };
 
         public static FileValidationOptions Document = new()
