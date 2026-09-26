@@ -15,6 +15,7 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
             services.AddScoped<ITranslationService, TranslationService>();
             services.AddScoped<IPasswordResetService, PasswordResetService>();
             services.AddScoped<IMailService, MailService>();
+            services.AddScoped<IFileValidationService, FileValidationService>();
             services.AddScoped<IMailVerificationService, MailVerificationService>();
             services.AddScoped<IUserLogService, UserLogService>();
             services.AddScoped<IUserService, UserService>();
