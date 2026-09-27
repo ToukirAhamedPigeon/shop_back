@@ -41,6 +41,7 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
             // services.AddScoped<IAppSettingService, AppSettingService>();
             services.AddScoped<IUserSettingService, UserSettingService>();
             services.AddScoped<IDocumentationService, DocumentationService>();
+            services.AddScoped<IDashboardService, DashboardService>();
             services.AddHttpContextAccessor();
 
             return services;
