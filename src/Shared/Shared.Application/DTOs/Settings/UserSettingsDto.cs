@@ -51,6 +51,10 @@ namespace shop_back.src.Shared.Application.DTOs.Settings
         // File upload properties
         public IFormFile? SidebarBgFile { get; set; }
         public IFormFile? LoginBgFile { get; set; }
+
+        // Remove the saved image (ignored when a new file is sent in the same request)
+        public bool? remove_sidebar_bg { get; set; }
+        public bool? remove_login_bg { get; set; }
     }
 
     public class UpdateGeneralSettingsDto

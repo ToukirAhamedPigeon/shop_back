@@ -130,6 +130,18 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 }
             }
             
+            // Handle removals (a new upload above takes precedence)
+            if (settings.remove_sidebar_bg == true && settings.SidebarBgFile == null && !string.IsNullOrEmpty(theme.sidebar_bg_image))
+            {
+                await FileHelper.DeleteFileAsync(theme.sidebar_bg_image);
+                theme.sidebar_bg_image = "";
+            }
+            if (settings.remove_login_bg == true && settings.LoginBgFile == null && !string.IsNullOrEmpty(theme.login_bg_image))
+            {
+                await FileHelper.DeleteFileAsync(theme.login_bg_image);
+                theme.login_bg_image = "";
+            }
+
             // Handle other fields
             if (settings.primary_color != null) theme.primary_color = settings.primary_color;
             if (settings.secondary_color != null) theme.secondary_color = settings.secondary_color;
