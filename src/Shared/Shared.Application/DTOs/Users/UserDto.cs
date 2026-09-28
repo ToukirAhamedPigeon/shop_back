@@ -39,5 +39,7 @@ namespace shop_back.src.Shared.Application.DTOs.Users
 
         public string[] Roles { get; set; } = Array.Empty<string>();
         public string[] Permissions { get; set; } = Array.Empty<string>();
+        /// <summary>Permission groups given to the user directly.</summary>
+        public string[] Groups { get; set; } = Array.Empty<string>();
     }
 }

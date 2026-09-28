@@ -25,6 +25,7 @@ namespace shop_back.src.Shared.Infrastructure.Extensions
             services.AddScoped<IUniqueCheckService, UniqueCheckService>();
             services.AddScoped<IRoleService, RoleService>();
             services.AddScoped<IPermissionService, PermissionService>();
+            services.AddScoped<IPermissionGroupService, PermissionGroupService>();
              // Register EmailFetchBackgroundService as Singleton
             services.AddSingleton<EmailFetchBackgroundService>();
             

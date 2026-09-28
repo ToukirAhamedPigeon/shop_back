@@ -16,6 +16,7 @@ namespace shop_back.src.Shared.Application.Repositories
         Task<string[]> GetRoleNamesByUserIdAsync(Guid userId);
         Task<string[]> GetRolePermissionsByUserIdAsync(Guid userId);
         Task<string[]> GetModelPermissionsByUserIdAsync(Guid userId);
+        Task<string[]> GetGroupPermissionsByUserIdAsync(Guid userId);
         Task<string[]> GetAllPermissionsByUserIdAsync(Guid userId);
         Task<string[]> GetAllRolesAsync();
         Task<string[]> GetAllPermissionsAsync();

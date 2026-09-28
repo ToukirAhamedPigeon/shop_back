@@ -11,6 +11,9 @@ namespace shop_back.src.Shared.Application.DTOs.Roles
         public string GuardName { get; set; } = "admin";
         
         public List<string> Permissions { get; set; } = new();
+
+        /// <summary>Permission group names. Null leaves the role's groups as they are.</summary>
+        public List<string>? Groups { get; set; }
         
         public string? IsActive { get; set; } // "true"/"false"
     }

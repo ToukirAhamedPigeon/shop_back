@@ -548,6 +548,20 @@ builder.Services.AddCors(p =>
 
 var app = builder.Build();
 
+// ------------------- PERMISSION GROUP TABLES -------------------
+// Idempotent; creates the tables on databases that predate the feature.
+try
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await PermissionGroupSchema.EnsureAsync(db);
+    Console.WriteLine("✅ Permission group tables ready");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"❌ Could not prepare permission group tables: {ex.Message}");
+}
+
 // ------------------- INITIALIZE FILE HELPER -------------------
 try
 {

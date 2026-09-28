@@ -24,9 +24,11 @@ namespace shop_back.src.Shared.Infrastructure.Services
         private readonly IMailVerificationService _mailVerificationService;
         private readonly AppDbContext _context;
         private readonly IChangePasswordService _changePasswordService;
+        private readonly IPermissionGroupRepository _groups;
 
-        public UserService(AppDbContext context, IUserRepository repo, IRolePermissionRepository rolePermissionRepo, UserLogHelper userLogHelper, IMailVerificationService mailVerificationService, IChangePasswordService changePasswordService)   
+        public UserService(AppDbContext context, IUserRepository repo, IRolePermissionRepository rolePermissionRepo, UserLogHelper userLogHelper, IMailVerificationService mailVerificationService, IChangePasswordService changePasswordService, IPermissionGroupRepository groups)   
         {
+            _groups = groups;
             _context = context;
             _repo = repo;
             _rolePermissionRepo = rolePermissionRepo;
@@ -79,7 +81,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 CreatedAt = user.CreatedAt,
                 UpdatedAt = user.UpdatedAt,
                 Roles = roles,
-                Permissions = permissions
+                Permissions = permissions,
+                Groups = await _groups.GetGroupNamesByUserIdAsync(user.Id)
             };
         }
 
@@ -89,10 +92,13 @@ namespace shop_back.src.Shared.Infrastructure.Services
             if (user == null) return null;
 
             var roles = await _rolePermissionRepo.GetRoleNamesByUserIdAsync(user.Id) ?? Array.Empty<string>();
-            var allPermissions = await _rolePermissionRepo.GetAllPermissionsByUserIdAsync(user.Id) ?? Array.Empty<string>();
+            // "Extra" permissions are the ones stored on the user, minus what the
+            // roles already give. Group permissions are not extras: they come
+            // and go with the groups.
+            var storedPermissions = await _rolePermissionRepo.GetModelPermissionsByUserIdAsync(user.Id) ?? Array.Empty<string>();
             var rolePermissions = await _rolePermissionRepo.GetPermissionsByRolesAsync(roles) ?? Array.Empty<string>();
 
-            var directPermissions = allPermissions.Except(rolePermissions).ToArray();
+            var directPermissions = storedPermissions.Except(rolePermissions).ToArray();
 
             return new UserDto
             {
@@ -122,7 +128,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     ? _context.Users.FirstOrDefault(u => u.Id == user.UpdatedBy.Value)?.Name
                     : null,
                 Roles = roles,
-                Permissions = directPermissions
+                Permissions = directPermissions,
+                Groups = await _groups.GetGroupNamesByUserIdAsync(user.Id)
             };
         }
     
@@ -231,6 +238,11 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 await _rolePermissionRepo.AssignRolesAsync(user.Id, request.Roles.ToArray());
                 if (request.Permissions?.Any() == true)
                     await _rolePermissionRepo.AssignPermissionsAsync(user.Id, request.Permissions.ToArray());
+                if (request.Groups?.Any() == true)
+                {
+                    await _groups.SetGroupsForUserAsync(user.Id, request.Groups);
+                    await _groups.SaveChangesAsync();
+                }
 
                 // 🔹 12️⃣ Log snapshot
                 var afterSnapshot = new
@@ -384,6 +396,9 @@ namespace shop_back.src.Shared.Infrastructure.Services
             
             await _rolePermissionRepo.SetPermissionsForUserAsync(user.Id, filteredPermissions);
 
+            if (request.GroupsSet)
+                await _groups.SetGroupsForUserAsync(user.Id, request.Groups ?? new List<string>());
+
             // 8️⃣ Handle email verification if email changed
             if (emailChanged)
             {
@@ -433,7 +448,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 CreatedAt = user.CreatedAt,
                 UpdatedAt = user.UpdatedAt,
                 Roles = roles,
-                Permissions = permissions
+                Permissions = permissions,
+                Groups = await _groups.GetGroupNamesByUserIdAsync(user.Id)
             };
         }
 

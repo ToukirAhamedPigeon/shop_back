@@ -18,12 +18,14 @@ namespace shop_back.src.Shared.Infrastructure.Services
         private readonly IRolePermissionRepository _repo;
         private readonly AppDbContext _context;
         private readonly UserLogHelper _userLogHelper;
+        private readonly IPermissionGroupRepository _groups;
 
-        public RoleService(IRolePermissionRepository repo, AppDbContext context, UserLogHelper userLogHelper)
+        public RoleService(IRolePermissionRepository repo, AppDbContext context, UserLogHelper userLogHelper, IPermissionGroupRepository groups)
         {
             _repo = repo;
             _context = context;
             _userLogHelper = userLogHelper;
+            _groups = groups;
         }
 
         public async Task<object> GetRolesAsync(RolePermissionFilterRequest request)
@@ -57,7 +59,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 CreatedAt = role.CreatedAt,
                 UpdatedAt = role.UpdatedAt,
                 Permissions = permissions.Select(p => 
-                    p.GetType().GetProperty("Name")?.GetValue(p)?.ToString() ?? "").ToArray()
+                    p.GetType().GetProperty("Name")?.GetValue(p)?.ToString() ?? "").ToArray(),
+                Groups = await _groups.GetGroupNamesByRoleIdAsync(role.Id)
             };
         }
 
@@ -134,6 +137,9 @@ namespace shop_back.src.Shared.Infrastructure.Services
                         var expandedPermissions = NameExpander.ExpandPermissionNames(request.Permissions);
                         await _repo.AssignPermissionsToRoleAsync(role.Id, expandedPermissions);
                     }
+
+                    if (request.Groups != null && request.Groups.Any())
+                        await _groups.SetGroupsForRoleAsync(role.Id, request.Groups);
                 }
                 
                 await _repo.SaveChangesAsync();
@@ -141,7 +147,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 var afterSnapshot = new
                 {
                     Roles = createdRoles.Select(r => new { r.Id, r.Name, r.GuardName, r.IsActive }),
-                    Permissions = request.Permissions
+                    Permissions = request.Permissions,
+                    Groups = request.Groups
                 };
                 
                 var changesJson = JsonConvert.SerializeObject(new { before = (object?)null, after = afterSnapshot });
@@ -186,7 +193,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 role.Name,
                 role.GuardName,
                 role.IsActive,
-                Permissions = await _repo.GetPermissionsByRoleIdAsync(role.Id)
+                Permissions = await _repo.GetPermissionsByRoleIdAsync(role.Id),
+                Groups = await _groups.GetGroupNamesByRoleIdAsync(role.Id)
             };
             
             Guid? updatedByGuid = null;
@@ -207,6 +215,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                 
                 _repo.UpdateRole(role);
                 await _repo.AssignPermissionsToRoleAsync(role.Id, request.Permissions);
+                if (request.Groups != null)
+                    await _groups.SetGroupsForRoleAsync(role.Id, request.Groups);
                 await _repo.SaveChangesAsync();
                 
                 var afterSnapshot = new
@@ -215,7 +225,8 @@ namespace shop_back.src.Shared.Infrastructure.Services
                     role.Name,
                     role.GuardName,
                     role.IsActive,
-                    Permissions = request.Permissions
+                    Permissions = request.Permissions,
+                    Groups = request.Groups
                 };
                 
                 var changesJson = JsonConvert.SerializeObject(new { before = beforeSnapshot, after = afterSnapshot });

@@ -88,13 +88,45 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                           .ToArrayAsync();
         }
 
-        // 6. Merged unique Permissions (Role-based + Direct)
+        // 5b. Permission names that reach the user through permission groups:
+        //     groups given to the user directly and groups given to their roles.
+        public async Task<string[]> GetGroupPermissionsByUserIdAsync(Guid userId)
+        {
+            if (!await _context.Users.AnyAsync(u => u.Id == userId && u.IsActive && !u.IsDeleted))
+                return Array.Empty<string>();
+
+            var viaUser = from mg in _context.ModelPermissionGroups
+                          join g in _context.PermissionGroups on mg.GroupId equals g.Id
+                          join gp in _context.PermissionGroupPermissions on g.Id equals gp.GroupId
+                          join p in _context.Permissions on gp.PermissionId equals p.Id
+                          where mg.ModelId == userId && mg.ModelName == "User"
+                                && g.IsActive
+                                && p.IsActive && !p.IsDeleted
+                          select p.Name;
+
+            var viaRoles = from mr in _context.ModelRoles
+                           join r in _context.Roles on mr.RoleId equals r.Id
+                           join rg in _context.RolePermissionGroups on r.Id equals rg.RoleId
+                           join g in _context.PermissionGroups on rg.GroupId equals g.Id
+                           join gp in _context.PermissionGroupPermissions on g.Id equals gp.GroupId
+                           join p in _context.Permissions on gp.PermissionId equals p.Id
+                           where mr.ModelId == userId && mr.ModelName == "User"
+                                 && r.IsActive && !r.IsDeleted
+                                 && g.IsActive
+                                 && p.IsActive && !p.IsDeleted
+                           select p.Name;
+
+            return await viaUser.Union(viaRoles).Distinct().ToArrayAsync();
+        }
+
+        // 6. Merged unique Permissions (Role-based + Direct + Groups)
         public async Task<string[]> GetAllPermissionsByUserIdAsync(Guid userId)
         {
             var rolePermissions = await GetRolePermissionsByUserIdAsync(userId);
             var directPermissions = await GetModelPermissionsByUserIdAsync(userId);
+            var groupPermissions = await GetGroupPermissionsByUserIdAsync(userId);
 
-            return rolePermissions.Concat(directPermissions).Distinct().ToArray();
+            return rolePermissions.Concat(directPermissions).Concat(groupPermissions).Distinct().ToArray();
         }
         
         public async Task<string[]> GetAllRolesAsync()
@@ -200,17 +232,28 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
             await _context.SaveChangesAsync();
         }
 
+        /// <summary>Everything the named roles give: their own permissions and their groups' permissions.</summary>
         public async Task<string[]> GetPermissionsByRolesAsync(IEnumerable<string> roleNames)
         {
-            return await (from r in _context.Roles
-                        join rp in _context.RolePermissions on r.Id equals rp.RoleId
-                        join p in _context.Permissions on rp.PermissionId equals p.Id
-                        where roleNames.Contains(r.Name)
-                                && r.IsActive && !r.IsDeleted
-                                && p.IsActive && !p.IsDeleted
-                        select p.Name)
-                        .Distinct()
-                        .ToArrayAsync();
+            var names = roleNames.ToList();
+            var direct = from r in _context.Roles
+                         join rp in _context.RolePermissions on r.Id equals rp.RoleId
+                         join p in _context.Permissions on rp.PermissionId equals p.Id
+                         where names.Contains(r.Name)
+                               && r.IsActive && !r.IsDeleted
+                               && p.IsActive && !p.IsDeleted
+                         select p.Name;
+            var viaGroups = from r in _context.Roles
+                            join rg in _context.RolePermissionGroups on r.Id equals rg.RoleId
+                            join g in _context.PermissionGroups on rg.GroupId equals g.Id
+                            join gp in _context.PermissionGroupPermissions on g.Id equals gp.GroupId
+                            join p in _context.Permissions on gp.PermissionId equals p.Id
+                            where names.Contains(r.Name)
+                                  && r.IsActive && !r.IsDeleted
+                                  && g.IsActive
+                                  && p.IsActive && !p.IsDeleted
+                            select p.Name;
+            return await direct.Union(viaGroups).Distinct().ToArrayAsync();
         }
 
         public async Task SetPermissionsForUserAsync(Guid userId, IEnumerable<string> permissionNames)
@@ -329,7 +372,12 @@ namespace shop_back.src.Shared.Infrastructure.Repositories
                     CreatedAt = role.CreatedAt,
                     UpdatedAt = role.UpdatedAt,
                     Permissions = permissions.Select(p => 
-                        p.GetType().GetProperty("Name")?.GetValue(p)?.ToString() ?? "").ToArray()
+                        p.GetType().GetProperty("Name")?.GetValue(p)?.ToString() ?? "").ToArray(),
+                    Groups = await (from rg in _context.RolePermissionGroups
+                                    join g in _context.PermissionGroups on rg.GroupId equals g.Id
+                                    where rg.RoleId == role.Id
+                                    orderby g.Name
+                                    select g.Name).ToArrayAsync()
                 });
             }
             
