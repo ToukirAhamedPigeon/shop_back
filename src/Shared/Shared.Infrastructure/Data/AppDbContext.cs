@@ -18,6 +18,10 @@ namespace shop_back.src.Shared.Infrastructure.Data
         public DbSet<RolePermission> RolePermissions { get; set; } = null!;
         public DbSet<ModelRole> ModelRoles { get; set; } = null!;
         public DbSet<ModelPermission> ModelPermissions { get; set; } = null!;
+        public DbSet<PermissionGroup> PermissionGroups { get; set; } = null!;
+        public DbSet<PermissionGroupPermission> PermissionGroupPermissions { get; set; } = null!;
+        public DbSet<RolePermissionGroup> RolePermissionGroups { get; set; } = null!;
+        public DbSet<ModelPermissionGroup> ModelPermissionGroups { get; set; } = null!;
         public DbSet<UserLog> UserLogs { get; set; } = null!;
         public DbSet<UserTableCombination> UserTableCombinations { get; set; } = null!;
         public DbSet<RefreshToken> RefreshTokens { get; set; } = null!;
@@ -174,6 +178,43 @@ namespace shop_back.src.Shared.Infrastructure.Data
                 .HasOne(rp => rp.Permission)
                 .WithMany(p => p.RolePermissions)
                 .HasForeignKey(rp => rp.PermissionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // ============================================
+            // Permission groups (tables: see PermissionGroupSchema)
+            // ============================================
+            modelBuilder.Entity<PermissionGroup>()
+                .HasIndex(g => g.Name)
+                .IsUnique();
+
+            modelBuilder.Entity<PermissionGroupPermission>()
+                .HasOne(gp => gp.Group)
+                .WithMany(g => g.GroupPermissions)
+                .HasForeignKey(gp => gp.GroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<PermissionGroupPermission>()
+                .HasOne(gp => gp.Permission)
+                .WithMany()
+                .HasForeignKey(gp => gp.PermissionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<RolePermissionGroup>()
+                .HasOne(rg => rg.Role)
+                .WithMany()
+                .HasForeignKey(rg => rg.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<RolePermissionGroup>()
+                .HasOne(rg => rg.Group)
+                .WithMany()
+                .HasForeignKey(rg => rg.GroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ModelPermissionGroup>()
+                .HasOne(mg => mg.Group)
+                .WithMany()
+                .HasForeignKey(mg => mg.GroupId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             // ============================================

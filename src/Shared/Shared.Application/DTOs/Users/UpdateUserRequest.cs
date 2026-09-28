@@ -30,5 +30,16 @@ namespace shop_back.src.Shared.Application.DTOs.Users
 
         public List<string> Roles { get; set; } = new();
         public List<string>? Permissions { get; set; }
+
+        /// <summary>Permission groups given to the user directly.</summary>
+        [FromForm(Name = "groups")]
+        public List<string>? Groups { get; set; }
+
+        /// <summary>
+        /// A form with no "groups" field could mean "none" or "not sent" (older
+        /// clients), so groups are only replaced when this is true.
+        /// </summary>
+        [FromForm(Name = "groups_set")]
+        public bool GroupsSet { get; set; }
     }
 }

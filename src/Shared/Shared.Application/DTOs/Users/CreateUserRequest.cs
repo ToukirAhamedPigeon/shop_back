@@ -28,5 +28,6 @@ namespace shop_back.src.Shared.Application.DTOs.Users
         // Roles & Permissions
         public List<string> Roles { get; set; } = new();
         public List<string> Permissions { get; set; } = new();
+        public List<string> Groups { get; set; } = new();
     }
 }
